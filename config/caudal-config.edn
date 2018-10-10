@@ -1,0 +1,167 @@
+{
+ ;Caudal configuration
+ ;Parameters:
+ ;  :streams Map that contains the streams where events will be passed, it contains:
+ ;    :ns Namespace of the stream configuration file
+ ;    :store Map that contains the storage definition
+ ;    :streams-var Symbol name where the stream configuration is located
+ ;      :parameters List that contains the store configuration
+ ;      :implementations List that contains the namespaces of store implementations to use
+ ;        :default-ttl Time to live to be set to events that do not contain it
+ ;        :ttl-delay Max time to live to purge events
+ :caudal {:streams         {:main {:origin mx.interware.caudal.test.simple-config/invex-streams
+                                   :back-presure-limit 1000}
+                            ;mx.interware.caudal.test.simple-config/streams-w-paths
+
+                            :test {:origin mx.interware.caudal.test.simple-config/test-streams}}
+
+          ;Caudal Listener
+          ;This listener 'tcp-server' waits for an Caudal appender connection, and retrieves the events sent from it
+          ;parameters needed are:
+          ;:port Integer number for the listening port where connections will be received
+          ;:idle-period Socket time to wait for incoming data
+          :listeners       [{:type   mx.interware.caudal.io.tcp-server
+                             :stream-to  [:test :main]
+                             :parameters {:port        9900
+                                          :idle-period 20}}
+
+                            {:type       mx.interware.caudal.io.kafka-X
+                             :stream-to  [:main]
+                             :parameters {:topic-name          "test"
+                                          :consumer-parameters {:bootstrap.servers       "localhost:9092"
+                                                                :group.id                "test"
+                                                                :enable.auto.commit      true
+                                                                :auto.commit.interval.ms 1000
+                                                                :session.timeout.ms      30000
+                                                                :key.deserializer        "org.apache.kafka.common.serialization.StringDeserializer"
+                                                                :value.deserializer      "org.apache.kafka.common.serialization.StringDeserializer"}}}
+
+                            {:type       mx.interware.caudal.io.rest-server
+                             :stream-to  [:test :main]
+                             :parameters {:host "localhost"
+                                          :port 9901}}
+
+                            ;Documentation for listener :tailer type:
+                            ;This listener 'tails' follows the information that is sent to a group of files
+                            ;parameters needed are:
+                            ;:parser is associated to either:
+                            ;        - a string with the fully qualified name of a function
+                            ;          to parse a line that enters the log (if this parser fn returns nil the line
+                            ;          is ignored)
+                            ;        or
+                            ;        - a map that contains :factory asociated with a string with the fully
+                            ;          qualified name of a factory function that when invoked will return
+                            ;          a parser function for the lines in the log, :parameters define the parameters
+                            ;          that will be used when the invocation of the factory function is executed
+                            ;:inputs can be either a vector of strings with the path to the log files being tailed or a directory
+                            ;        configuration map indicating directoy and wildcard corresponding to desired files.
+                            ;        In case vector is used, the order of the files is important if mixing is defined, files that appear
+                            ;        first will take precedence.
+                            ;:mixing is optional an if present requires:
+                            ;        :ts-re (timestamp regular expression) a regular expression with one group
+                            ;               that will define where an how is the timestamp in the log line
+                            ;        :format is a java.text.SimpleDateFormat format that conforms to the timestamp
+                            ;        :delta is the minimum time than a line will be held to allow the other
+                            ;               tailing files to sync (should be more than the tailer re-read delta
+                            ;:delta (re-read) delta, when there is no more entries in the log, tailer will wait
+                            ;       (sleep) for this delta, then will re-read from the log for more entries.
+                            ;:from-end indicates to read from the end of the file
+                            ;:reopen indicates what to do when log file rotates
+                            ;:buffer-size maximum number of characters to read from the file at once
+                            {:type       mx.interware.caudal.io.tailer-server
+                             :stream-to  [:main]
+                             :parameters {:parser      mx.interware.caudal.test.simple-parser/parse-cathel-line
+                                          ;:inputs      ["./logs/input1.log" "./logs/input2.log"]
+                                          :inputs      {:directory  "./logs"
+                                                        :wildcard   "*txt"
+                                                        :expiration 5}
+                                          :delta       1000
+                                          :from-end    true
+                                          :reopen      true
+                                          :buffer-size 16384}}
+
+                            ;TCP-log4j Listener
+                            ;This listener 'tcp-log4' waits for a log4j's socket appender connection, and retrieves the events sent from it
+                            ;parameters needed are:
+                            ;:port Integer number for the listening port where connections will be received
+                            ;:parser Function to parse the events
+                            {:type       mx.interware.caudal.io.log4j-server-X
+                             :stream-to  [:main]
+                             :parameters {:port        9902
+                                          :parser      mx.interware.caudal.test.simple-parser/parse-cathel-msg
+                                          :parserx {:factory "mx.interware.caudal.core.parsers/re-parser"}
+                                          :parameters {:re #".*(EJECUTANDO) +([a-zA-Z0-9]+).*time .>>.*|.*(FINALIZANDO) +([a-zA-Z0-9]+).*time .>> +([0-9]+).*"
+                                                       :tags [:_ :start :tx :end :tx :delta]}}}
+                            ;Syslog-server Listener
+                            ;This listener 'tcp-syslog' waits for a syslog connection, and retrieves the log events sent from it
+                            ;parameters needed are:
+                            ;:port Integer number for the listening port where connections will be received
+                            {:type       mx.interware.caudal.io.syslog-server-X
+                             :stream-to  [:main]
+                             :parameters {;:parser mx.interware.caudal.io.syslog-server/????
+                                          :port 9903}}
+
+                            ;Scheduler configuration:
+                            ;This listener 'sheduler' executes a list of jobs that can be configured every certain time
+                            ;parameters needed are:
+                            ;  :jobs List of jobs to be executed, configuration is:
+                            ;    -cron "QUARTZ trigger expression to define time to execute the task
+                            ;          more at: http://www.quartz-scheduler.org/documentation/quartz-2.x/tutorials/crontrigger.html
+                            ;    -event-factory-ns Namespace of the job file
+                            ;    -event-factory-var Symbol name of the job to be executed
+                            {:type       mx.interware.caudal.core.scheduler-server
+                             :stream-to  [:main]
+                             :jobs [{:runit? false
+                                     :cron-def "0 0/5 * ? * MON-FRI"
+                                     :event-factory mx.interware.caudal.core.scheduler-server/state-admin-event-factory
+                                     :parameters {:cmd :clear-all}}
+                                    {:runit? false
+                                     :cron-def "0 0/1 * ? * MON-FRI"
+                                     :event-factory mx.interware.caudal.core.scheduler-server/state-admin-event-factory
+                                     :parameters {:cmd :clear-keys :filter-key :ewma}}
+                                    {:runit? false
+                                     :cron-def "0 0/1 * ? * MON-FRI"
+                                     :event-factory mx.interware.caudal.core.scheduler-server/state-admin-event-factory
+                                     :parameters {:cmd :clear-keys :filter-key-re #".:tx-rate.*"}}
+                                    {:runit? true
+                                     :cron-def "0 0/5 * ? * MON-FRI"
+                                     :event-factory mx.interware.caudal.core.scheduler-server/state-admin-event-factory
+                                     :parameters {:cmd :load-history
+                                                  :path "config/stats-2016"
+                                                  ;:go-back-millis 86400000 ;ayer
+                                                  ;:date-fmt "yyyyMMdd"
+                                                  :key-name "performance"}}
+                                    {:runit? true
+                                     :cron-def "0 0/5 * ? * MON-FRI"
+                                     :event-factory mx.interware.caudal.core.scheduler-server/state-admin-event-factory
+                                     :parameters {:cmd :dump-state
+                                                  :dump-file "config/stats/state.edn"}}]}]}
+ ; CRON str = s M H D m w [y] acording to:
+ ; s=second, M=minute, H=hour (24), D=day, m=month, w=day of week, y=year (optional)
+ ; see: http://www.quartz-scheduler.org/documentation/quartz-2.2.x/tutorials/tutorial-lesson-06
+
+ ;:parameters {:jobs [{:cron "0 0/1 * ? * MON-FRI"}]}}
+
+ ;:event-factory {:type mx.interware.caudal.core.scheduler-server/state-admin-event-factory
+ ;                                                         :parameters {:cmd :clear-all}}
+
+ ;Elastic search configuration:
+ ;  :host Elastic search server address
+ ;  :port Elastic Search server port
+ ;  :index  Elastic Search index for Caudal
+ :elasticsearch {:host  "localhost"
+                 :port  9200
+                 :index "bbva-analisis"}
+
+ ; Outgoing email server configuration
+ ;  :host SMTP hostname/ip address
+ ;  :user SMTP authentication username
+ ;  :password SMTP authentication password
+ ;  :from The email to send as from
+ :smtp          {:host     "smtp.gmail.com"
+                 :user     "interware.caudal@gmail.com"
+                 :pass     "!QAZ@wsx"
+                 :ssl      :yes
+                 :subject  "Caudal Info"
+                 :to       ["destevez@interware.com.mx" "gcortes@interware.com.mx"]
+                 :from     "interware.caudal@gmail.com"}}

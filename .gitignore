@@ -1,0 +1,10 @@
+target/
+.lein-repl-history
+.lein-*
+.classpath
+logs/
+.nrepl-port
+doc/
+*.iml
+.idea/
+

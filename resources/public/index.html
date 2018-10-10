@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="css/material.min.css" type="text/css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <link href="css/style.css" rel="stylesheet" type="text/css">
+    <link href="css/dialog-polyfill.css" rel="stylesheet" type="text/css">
+    <link href="css/caudal.css" rel="stylesheet" type="text/css">
+  </head>
+  <body>
+    <div id="app" style="background:#fafafa;">
+      
+    </div>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
+      
+      // Load the Visualization API and the corechart package.
+      google.charts.load('current', {'packages':['corechart']});
+      
+    </script>
+    <script src="js/externs.js"></script>
+    <script src="js/compiled/caudal-dashboard.js"></script>
+    <script>mx.interware.caudal.dashboard.core.run();</script>    
+  </body>
+</html>
