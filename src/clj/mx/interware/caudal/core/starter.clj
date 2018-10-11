@@ -8,7 +8,7 @@
 
 (ns mx.interware.caudal.core.starter
   (:gen-class
-   :name "mx.interware.caudal.core.Starter")
+   :name mx.interware.caudal.core.Starter)
   (:require [clojure.tools.logging :as log]
             [clojure.pprint :as pp]
             [clojure.string :as string]

@@ -8,13 +8,14 @@
 
 (ns mx.interware.caudal.core.starter-dsl
   (:gen-class
-   :name "mx.interware.caudal.core.StarterDSL")
+   :name mx.interware.caudal.core.StarterDSL)
   (:require [clojure.tools.logging :as log]
             [clojure.tools.cli :refer [cli]]
             [clojure.java.io :refer [file]]
             [mx.interware.util.crypt :as crypt])
   (:import (org.apache.logging.log4j LogManager)
-           (org.apache.logging.log4j.core LoggerContext)))
+           (org.apache.logging.log4j.core LoggerContext))
+)
 
 (let [[_ name version] (-> "./project.clj" slurp read-string vec)]
   (defn name&version

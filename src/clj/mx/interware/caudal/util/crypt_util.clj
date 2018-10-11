@@ -7,11 +7,11 @@
 ;   You must not remove this notice, or any other, from this software
 
 (ns mx.interware.caudal.util.crypt-util
-  (:gen-class :name "mx.interware.caudal.util.CryptUtil")
+  (:gen-class :name mx.interware.caudal.util.CryptUtil)
   (:require [clojure.data.codec.base64 :as b64])
   (:import (javax.crypto Cipher)
            (javax.crypto.spec SecretKeySpec)))
-
+ 
 (defn as-string [v] (->> v (map char) (apply str)))
 
 (defn as-data [v] (.getBytes (as-string v)))

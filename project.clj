@@ -17,7 +17,7 @@
                  [codox "0.8.10"]
                  [lein-cljsbuild "1.1.4"]]
 
-  :dependencies [[org.clojure/clojure "1.8.0"]
+  :dependencies [[org.clojure/clojure "1.9.0"]
                  [org.clojure/core.async "0.3.443"]
 
                  ;; logging
