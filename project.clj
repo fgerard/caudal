@@ -28,12 +28,12 @@
                  [keybind "2.1.0"]
 
                  ;; ui
-                 [day8.re-frame/http-fx "0.1.3" :exclusions [com.google.guava/guava]]
+                 [day8.re-frame/http-fx "0.1.6" :exclusions [com.google.guava/guava]]
                  [re-frame "0.9.2" :exclusions [com.google.guava/guava]]
-                 [reagent "0.6.0" :exclusions [com.google.guava/guava]]
+                 [reagent "0.8.1" :exclusions [com.google.guava/guava]]
                  [com.yetanalytics/re-mdl "0.1.8" :exclusions [com.google.guava/guava cljsjs/react-with-addons]]
                  [com.twitter/hbc-core "2.2.0" :exclusions [com.google.guava/guava]]
-                 [org.clojure/clojurescript "1.9.229"]
+                 [org.clojure/clojurescript "1.10.339"]
 
                  [com.cerner/clara-rules "0.16.0"]
 
@@ -71,6 +71,19 @@
                  ]
 
   :main mx.interware.caudal.core.StarterDSL
+
+  :jvm-opts ~(concat
+               ; Normal JVM opts to pass in
+               ["-Xmx512m"]
+               ; Java 9+ recognition, adding --add-modules. Java versions before 9
+               ; had a different version syntax where they contained '.' delimiters,
+               ; from Java 9 onwards it has a simple versioning scheme based on one
+               ; number.
+               (let [[mayor minor version] (clojure.string/split (System/getProperty "java.version") #"\.")
+                     mayor (Integer/parseInt mayor)]
+                 (if (> mayor 1)
+                   ["--add-modules" "java.xml.bind"]
+                   [])))
 
   :repl-options {:prompt (fn [ns] (str "<" ns "> "))
                  :welcome (println "Welcome to the magical world of the repl!")
