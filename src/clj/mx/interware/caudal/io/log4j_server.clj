@@ -17,7 +17,7 @@
 
 (defn start-server [port message-parser sink]
   (let [sserv (ServerSocket. port)
-        _ (log/info (pr-str {:log4j-server {:port port}}))]
+        _ (log/info "Starting Log4J Server, port:" port)]
     (while (not (.isClosed sserv))
         (try
           (let [socket (.accept sserv)
