@@ -90,7 +90,7 @@
                                                    (let [{:keys [detail] :as gformat} (google-v11n-format-new params data)]
                                                      [:div.panel-float.mdl-shadow--2dp
                                                       [util/inner-panel (str (into [] group-name))
-                                                       [:div [pie-graph gformat]
+                                                       [:div.panel-row [pie-graph gformat]
                                                         [:div.panel-body [mdl/table 
                                                                           :selectable? false                                                         
                                                                           :headers (first detail)
