@@ -1,52 +1,118 @@
 (ns mx.interware.caudal.io.telegram
-  (:require [clojure.tools.logging :as log] 
+  (:require [clojure.core.async :refer [go-loop timeout <!]]
+            [clojure.tools.logging :as log]
             [clojure.string :as string] 
+            [clojure.data.json :as json]
             [aleph.http :as http]
             [byte-streams :as bs]
-            [mx.interware.caudal.streams.common :as common :refer [propagate]]))
+            [mx.interware.caudal.util.ns-util :refer [resolve&get-fn]]
+            [mx.interware.caudal.streams.common :as common :refer [propagate start-listener]]))
 
-(defn push 
-  "Sends a message to caudal-bot-server using a Caudal APIKey"
-  [event {:keys [apikey url message]}]
-  (let [url   (or url "http://caudal.io/push")
-        msg   (or message (str event))
-        len   (count msg)
-        query "?apikey=KEY"
-        query (string/replace query "KEY" apikey)
-        srv   (str url query)]
-    (if (> len 4096) ; https://core.telegram.org/method/messages.sendMessage
-      (do
-        (log/warn "Message too long (length = " len ")")
-        (log/warn "Current maximum length is 4096 UTF8 characters"))      
-      (-> @(http/post srv {:headers {"accept" "application/edn" "content-type" "application/edn"} :form-params {:message msg}})
-          :body
-          bs/to-string
-          read-string))))
+(def base-url "https://api.telegram.org/bot")
 
-(defn telegram
-  "
-  Streamer function that send a message or event to Telegram via @caudalbot
+(defn send-text*
+  "Sends message to the chat"
+  ([token chat-id text] (send-text* token chat-id {} text))
+  ([token chat-id options text]
+   (try
+     (let [url  (str base-url token "/sendMessage")
+           body (into {:chat_id chat-id :text text} options)
+           resp @(http/request {:request-method "post"
+                                :url url
+                                :headers {"Content-Type" "application/json"}
+                                :query-params body})]
+       (-> resp :body))
+     (catch clojure.lang.ExceptionInfo e
+       (log/error (-> e
+                      .getData
+                      :body
+                      bs/to-string))))))
 
-  _options:_ can be a map or a function of event that return a map. This map must contain :apikey (as mandatory),  :url and :message (as optional)
+(defn send-file* [token chat-id options file method field filename]
+  "Helper function to send various kinds of files as multipart-encoded"
+  (try
+    (let [url          (str base-url token method)
+          base-form    [{:part-name "chat_id" :content (str chat-id)}
+                        {:part-name field :content file :name filename}]
+          options-form (for [[key value] options]
+                         {:part-name (name key) :content value})
+          form         (into base-form options-form)
+          resp         @(http/request {:request-method "post"
+                                       :url url
+                                       :headers {"Content-Type" "application/json"}
+                                       :multipart form})]
+      (-> resp :body))
+    (catch clojure.lang.ExceptionInfo e
+       (log/error (-> e
+                      .getData
+                      :body
+                      bs/to-string)))))
 
-  Examples:
-
-  ```
-  ;; Get your own APIKey in http://caudal.io/bot/apikey
-  (def secret-key \"caudal-000000000\")
-  
-  ;; Using a map, if :message is not specified then sends entire event
-  (telegram [{:apikey secret-key}])
-  
-  ;; Using a function
-  (telegram [(fn [e] (let [{:keys [app error]}]
-                       {:apikey  secret-key 
-                        :message (str \"Error in app \" app \" : \" error)}))])
-  ```
-  "
-  [[options] & children]
-  
+(defn send-text
+  [[key-token key-chat-id text options] & children]
   (fn [by-path state event]
-    (let [options (if (fn? options) (options event) options)]
-      (push event options))
+    (let [token (key-token event)
+          chat-id (key-chat-id event)
+          text (if (or (fn? text) (keyword? text)) (text event) text)
+          options (or options {})]
+      (send-text* token chat-id options text))
     (common/propagate by-path state event children)))
+
+(defn send-photo
+  [[key-token key-chat-id image options] & children]
+  (fn [by-path state event]
+    (let [token (key-token event)
+          chat-id (key-chat-id event)
+          image (if (or (fn? image) (keyword? image)) (image event) image)
+          options (or options {})]
+      (send-file* token chat-id options image "/sendPhoto" "photo" "photo.png"))
+    (common/propagate by-path state event children)))
+
+(defn new-offset
+  "Returns new offset for Telegram updates"
+  [result default]
+  (if (and result (< 0 (count result)))
+      (-> result last :update_id inc)
+      default))
+
+(defn poller-error [e url params]
+  (try
+    (log/error (-> e
+                   .getData
+                   :body
+                   bs/to-string
+                   (json/read-str :key-fn keyword)
+                   (assoc :url url :params params)))
+    (catch Throwable t
+      {:error (.getMessage e) :url url :params params})))
+
+(defn poller [url params]
+  (try
+    (log/debug {:pooling url :params params})
+    (-> @(http/request {:request-method "get" :url url :query-params params})
+        :body
+        bs/to-string
+        (json/read-str :key-fn keyword))
+    (catch Exception e
+      (poller-error e url params))))
+
+(defn start-server [token message-parser sink]
+  (log/info "Starting Telegram Bot Server, token: " token)
+  (let [url (str base-url token "/getUpdates")]
+    (go-loop [offset 0 limit 100] 
+      (let [params {:timeout 1 :offset offset :limit limit}
+            {:keys [ok result] :as data} (poller url params)]
+        (if ok
+          (dorun (map (fn [message]
+                        (let [parsed (and message-parser (message-parser (get-in message [:message :text])))]
+                          (sink (merge message parsed {:telegram/token token :telegram/chat-id (get-in message [:message :chat :id])}))))
+                      result))
+          (log/error data))
+        (<! (timeout 1000))
+        (recur (new-offset result offset) limit)))))
+
+(defmethod start-listener 'mx.interware.caudal.io.telegram
+  [sink config]
+  (let [{:keys [token parser]} (get-in config [:parameters])
+        parser-fn (if parser (if (symbol? parser) (resolve&get-fn parser) parser))]
+    (start-server token parser-fn sink)))
