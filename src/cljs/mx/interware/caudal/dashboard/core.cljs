@@ -84,8 +84,9 @@
             [:div.selector
              (into [:select.form-control
                     {:on-change #(state-fn %)
-                     :disabled (nil? streamers)}
-                    [:option "streamer ..."]] (map (fn [x] [:option (if (= x selected) {:selected true}) x]) streamers))]
+                     :disabled (nil? streamers)
+                     :value (or selected "streamer ...")}
+                    [:option "streamer ..."]] (map (fn [x] [:option x]) (sort streamers)))]
             ;[:div (pr-str status)]
             [mdl/loading-spinner
               :is-active? (or (= status "loading")
@@ -93,11 +94,19 @@
             ]]]]]]
       [mdl/layout-drawer
        :children
-       [[mdl/layout-title
+       ;
+       [#_[mdl/layout-title
          :label "caudal"
          :attr  {:on-click (fn [_]
                              (re-frame/dispatch [:select-tab "server"]))
                  :style    {:cursor "pointer"}}]
+        [:nav.mdl-navigation {:style {:text-align "center"}}
+         [:a {:href "#"}
+          [:img {:src "caudal.svg"
+                 :style {:width "72px" :height "72px" :cursor "pointer"}
+                 :on-click  (fn [_]
+                              (re-frame/dispatch [:select-tab "server"]))
+                 }]]]
         [views/topbar-panel]
         [mdl/layout-nav
          :children
@@ -142,7 +151,7 @@
 
 (def demo-map ;(sorted-map)
   {:server {:title "caudal" :icon [:i.material-icons "explore"] :component server/panel}
-   :doughnut {:title "doughnut" :icon [:i.material-icons "filter_7"]
+   :doughnut {:title "doughnut" :icon [:i.material-icons "donut_large"]
              :component (doughnut/panel-factory)
              ;:params {:success-vs-error {:value-fn :n :tooltip [:n]},
               ;        :hourly-stats {:value-fn :mean, :tooltip [:mean :stdev :count]},
@@ -173,12 +182,25 @@
   (let [tab @(re-frame/subscribe [:tab])
         {{view-conf :caudal/view-conf :as data} :data :as state} @(re-frame/subscribe [:state])
         current-demo (keyword tab)
-        types (conj (if view-conf #{"doughnut" "welford" "rate"} #{}) "server")
+        types (conj (set (keys view-conf)) :server)
+        ; _ (.log js/console "vconf:" (str view-conf))
+        _ (.log js/console "types:" (str types))
+        _ (.log js/console (str ))
+        demo-map (reduce (fn [r [k v]]
+                           (.log js/console (str "k: " k))
+                           (if-let [occur (types k)]
+                             (assoc r k v)
+                             r))
+                         {}
+                         demo-map)
         demo-map (reduce
                   (fn [r [k v]]
+                    (.log js/console (str k))
                     (assoc-in r [k :params] v))
                   demo-map
-                  view-conf)]
+                  view-conf)
+        ;_ (.log js/console "demom:" (str demo-map))
+        ]
     [demo-layout
        :demo-map        demo-map
        :current-demo-ra current-demo
