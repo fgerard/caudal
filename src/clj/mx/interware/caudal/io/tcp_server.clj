@@ -8,7 +8,8 @@
 
 (ns mx.interware.caudal.io.tcp-server
   (:require [clojure.tools.logging :as log]
-            [mx.interware.caudal.streams.common :refer [start-listener]])
+            [mx.interware.caudal.streams.common :refer [start-listener]]
+            [mx.interware.caudal.util.ns-util :refer [resolve&get-fn require-name-spaces]])
   (:import (java.net InetSocketAddress)
            (java.nio.charset Charset)
            (org.apache.log4j PropertyConfigurator)
@@ -19,23 +20,23 @@
            (org.apache.mina.transport.socket.nio NioSocketAcceptor)
            (org.apache.mina.core.session IoSession IdleStatus)))
 
-(defn read-event [str]
+(defn read-event [parse-fn str]
   (try
-    (read-string str)
+    (parse-fn str)
     (catch Exception e
       nil)))
 
-(defn create-handler [sink]
+(defn create-handler [parse-fn sink]
   (let [handler (reify org.apache.mina.core.service.IoHandler
-                  (^void exceptionCaught [this ^IoSession session  ^Throwable cause]
+                  (^void exceptionCaught [this ^IoSession session ^Throwable cause]
                     (.printStackTrace cause))
-                  (^void inputClosed [this  ^IoSession session]
+                  (^void inputClosed [this ^IoSession session]
                     (log/info "Client closed connection")
                     (.closeNow session))
                   (^void messageReceived [this ^IoSession session ^Object message]
                     (let [message-str (.toString message)]
                       ;(log/debug "message-str : " message-str)
-                      (when-let [event (read-event message-str)]
+                      (when-let [event (read-event parse-fn message-str)]
                         (if (= "EOT" message-str)
                           (.closeOnFlush session)
                           (do
@@ -53,12 +54,10 @@
                   (^void sessionOpened [this ^IoSession session]))]
     handler))
 
-(defn start-server [port idle-period sink]
+(defn start-server [port idle-period sink parse-fn buffer-size max-line-length]
   ;(PropertyConfigurator/configure "log4j.properties")
   (try
-    (let [buffer-size     4096
-          max-line-length (* 1024 1024)
-          acceptor        (new NioSocketAcceptor)
+    (let [acceptor        (new NioSocketAcceptor)
           codec-filter    (new ProtocolCodecFilter
                                (doto
                                  (new TextLineCodecFactory (Charset/forName "UTF-8"))
@@ -66,11 +65,8 @@
                                  (.setEncoderMaxLineLength max-line-length)))
           filter-chain    (.getFilterChain acceptor)
           session-config  (.getSessionConfig acceptor)
-          _               (println "1. " sink)
-          handler         (create-handler sink)
-          _               (println "2. " port)
+          handler         (create-handler parse-fn sink)
           socket-address  (new InetSocketAddress port)
-          _               (println "3. ")
           logging-filter  (doto (new LoggingFilter)
                             (.setMessageReceivedLogLevel LogLevel/DEBUG)
                             (.setMessageSentLogLevel LogLevel/DEBUG)
@@ -78,7 +74,7 @@
                             (.setSessionCreatedLogLevel LogLevel/DEBUG)
                             (.setSessionIdleLogLevel LogLevel/DEBUG)
                             (.setSessionOpenedLogLevel LogLevel/DEBUG))]
-      (log/info "Starting server on port : " port " ...")
+      (log/info "Starting TCP Server, port:" port)
       (.addLast filter-chain "logger" logging-filter)
       (.addLast filter-chain "codec" codec-filter)
       (.setHandler acceptor handler)
@@ -91,6 +87,7 @@
 
 (defmethod start-listener 'mx.interware.caudal.io.tcp-server
   [sink config]
-  (println (pr-str config))
-  (let [{:keys [port idle-period]} (get-in config [:parameters])]
-    (start-server port idle-period sink)))
+  (let [{:keys [port idle-period parser buffer-size max-line-length]
+         :or {parser read-string buffer-size 4096 max-line-length 3145728}} (get-in config [:parameters])
+        parse-fn     (if (symbol? parser) (resolve&get-fn parser) parser)]
+    (start-server port idle-period sink parse-fn buffer-size max-line-length)))
