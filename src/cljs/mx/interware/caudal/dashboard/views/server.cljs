@@ -13,7 +13,6 @@
         {:keys [uri name version uptime]} @(re-frame/subscribe [:url-target-message])
         selected @(re-frame/subscribe [[:state :selected]])
         states @(re-frame/subscribe [:states])
-
         panel-heading "Caudal Server not connected yet"
 
         content [:div.panel-body
@@ -39,7 +38,7 @@
                                                                                       "mdl-color--gray mdl-color-text--white")
                                                                              :child [:i.material-icons "visibility"]]
                                                                             [mdl/chip-text
-                                                                             :child state]]]) states))]]]]
+                                                                             :child state]]]) (reverse (sort states))))]]]]
 
     (condp = status
       :success

@@ -14,8 +14,7 @@
             [clojure.java.io :refer [file]]
             [mx.interware.util.crypt :as crypt])
   (:import (org.apache.logging.log4j LogManager)
-           (org.apache.logging.log4j.core LoggerContext))
-)
+           (org.apache.logging.log4j.core LoggerContext)))
 
 (let [[_ name version] (-> "./project.clj" slurp read-string vec)]
   (defn name&version
@@ -94,7 +93,7 @@
             (println "Password needed to encrypt config, use -p")
             (System/exit 1)))
         (do
-          (println :opts (pr-str opts))
+          (log/debug :opts (pr-str opts))
           (-> (cast LoggerContext (LogManager/getContext false)) (.setConfigLocation (.toURI (log4j2-xml path))))
           (.addShutdownHook (Runtime/getRuntime) (Thread. #(log/info {:caudal :shudown})))
           (log/info (pr-str {:caudal :start :version version}))
