@@ -81,7 +81,7 @@
                         "/ /__/ /_/ / /_/ / /_/ / /_/ / /   \n"
                         "\\___/\\__,_/\\__,_/\\__,_/\\__,_/_/    \n"
                         "                                   \n"
-                        name " " version "\n"))]
+                        name " " version " clojure:" (clojure-version) "\n"))]
     (if-let [path (:config opts)]
       (if ((into #{}(keys opts)) :crypt)
         (if-let [pass (:pass opts)]
