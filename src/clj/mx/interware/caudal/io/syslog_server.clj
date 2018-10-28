@@ -83,7 +83,7 @@
         (try
           (let [socket (.accept sserv)
                 inaddr (.getInetAddress socket)
-                _      (log/info :accepting-syslog-connections :port port)
+                _      (log/info "Starting Syslog TCP Server, port: " port)
                 br     (BufferedReader. (InputStreamReader.
                                           (.getInputStream socket)))]
             (loop [line (.readLine br)]

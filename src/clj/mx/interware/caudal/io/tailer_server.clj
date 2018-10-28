@@ -29,10 +29,10 @@
   [line-channel]
   (let [listener (reify org.apache.commons.io.input.TailerListener
                    (^void handle [this ^String line]
-                     (log/debug "llego por tailer (1)")
+                     ;(log/debug "llego por tailer (1)")
                      ;((line-stats :solo-read 1))
                      (>!! line-channel line)
-                     (log/debug "llego por tailer (2)")
+                     ;(log/debug "llego por tailer (2)")
 
                      ;(Thread/sleep 1000)
                      )
