@@ -94,7 +94,6 @@
     (fn reduce-with-streamer [by-path state e]
       (let [d-k (key-factory by-path state-key)
             {reduced d-k :as new-state} (update state d-k mutator e)]
-        ;(println "****REDUCED*** " reduced)
         (if reduced
           (propagate by-path new-state reduced children)
           new-state)))))
@@ -331,6 +330,7 @@
                  (fn matcher-mutator [{:keys [start]
                                        aborter :caudal/aborter
                                        :or {} :as state} e type init? end?]
+                   (log/debug {:type type :start start :ts-val (ts-key e)})
                    ;(println "MUTATOR: " [type init? end? e])
                    (cond
                      (= type :timeout)
@@ -341,20 +341,22 @@
                        nil)
 
                      init?
-                     {:start (ts-key e) :caudal/aborter aborter}
+                     (if start
+                       (let [_ (log/warn {:double-start e})]
+                         {:start start :caudal/aborter aborter})
+                       {:start (ts-key e) :caudal/aborter aborter})
 
                      end?
                      (do ;(println "ES END!! start: " start )
                        (if start
                          {:propagate-metric? (- (ts-key e) start) :caudal/aborter aborter :start start}
-                         nil)))))
+                         (log/warn {:unstarted e}))))))
         matcher-fn (fn matcher-matcher-fn [state by-path d-k e]
                      (let [{{:keys [timeout?] :as matcher-state} d-k :as new-state} (update
                                                                                      state d-k mutator
-                                                                                     e :timeout nil nil)
-                           new-state (dissoc new-state d-k)]
+                                                                                     e :timeout nil nil)]
                        (if timeout?
-                         (propagate by-path new-state (assoc e ts-key :timeout) children)
+                         (propagate by-path (dissoc new-state d-k) (assoc e ts-key :timeout) children)
                          new-state)))]
     (fn matcher-streamer [by-path state e]
       (let [id                    (tx-id-fn e)

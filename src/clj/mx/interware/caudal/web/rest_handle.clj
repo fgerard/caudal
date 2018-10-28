@@ -31,10 +31,8 @@
 (defn event-handler
   [sink request]
   (try
-    (let [event (:body-params request)]
-      (log/debug (pr-str event))
-      (sink event)
-      {:status 202})
+    (sink request)
+    {:status 202}
     (catch Exception e
       (do
         (.printStackTrace e)
