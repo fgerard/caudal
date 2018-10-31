@@ -56,14 +56,14 @@
 
 (defn- loader
   "Loads DSL file configuration, recursively if is needed"
-  [path pass]
+  [pass path]
   (let [file (file path)]
     (if (.isDirectory file)
       (->> file
            file-seq
            (filter config-file?)
            (map str)
-           (map loader pass)
+           (map (partial loader pass))
            dorun)
       (load-config file pass))))
 
@@ -97,7 +97,7 @@
           (-> (cast LoggerContext (LogManager/getContext false)) (.setConfigLocation (.toURI (log4j2-xml path))))
           (.addShutdownHook (Runtime/getRuntime) (Thread. #(log/info {:caudal :shudown})))
           (log/info (pr-str {:caudal :start :version version}))
-          (loader path (:pass opts))))
+          (loader (:pass opts) path)))
       (do
         (println banner)
         (System/exit 1)))))
