@@ -1,0 +1,190 @@
+#!/usr/bin/env bash
+# Caudal script
+
+# Environment variables to determine startup behavior
+#
+# CAUDAL_BIN      Location of this file
+# CAUDAL_HOME     Location of Caudal directory
+# CAUDAL_LIB      Location of JAR dependency
+# CAUDAL_CONFIG   Location of Config directory (*.clj and log4j2.xml)
+# MINIMUM_MEMORY  Minimum Memory of JVM
+# MAXIMUM_MEMORY  Maximum Memory of JVM
+# TIMEZONE        ID for a TimeZone, either an abbreviation such as 
+#                 "PST", a full name such as "America/Los_Angeles", or
+#                 a custom ID such as "GMT-8:00".
+
+if test -z "$CAUDAL_BIN"; then
+  export CAUDAL_BIN="$(cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+fi
+
+if test -z "$CAUDAL_HOME"; then
+  export CAUDAL_HOME=$(dirname $CAUDAL_BIN)
+fi
+
+if test -z "$CAUDAL_LIB"; then
+  export CAUDAL_LIB=$CAUDAL_HOME/lib/*:$CAUDAL_HOME/target/*:$CAUDAL_HOME/ext/*
+fi
+
+if test -z "$CAUDAL_CONFIG"; then
+  export CAUDAL_CONFIG=$CAUDAL_HOME/config
+fi
+
+if test -z "$MININUM_MEMORY"; then
+  export MININUM_MEMORY=1024m
+fi
+
+if test -z "$MAXIMUM_MEMORY"; then
+  export MAXIMUM_MEMORY=1024m
+fi
+
+if test -z "$TIMEZONE"; then 
+  export TIMEZONE=America/Mexico_City
+fi
+
+# Caudal name & Java Class to start
+export CAUDAL_NAME=caudal
+export CAUDAL_STARTER=mx.interware.caudal.core.StarterDSL
+
+start() {
+
+  # Check for process already started in daemon mode
+  if [ -f "$CAUDAL_HOME/$CAUDAL_NAME.pid" ] ; then
+    pid=$( cat $CAUDAL_HOME/$CAUDAL_NAME.pid )
+    verif=$( ps -fea | grep "$pid" | grep -v "grep" )
+    if [ $? == 0 ] ; then
+      echo "Caudal already started PID : $pid"
+      exit 2
+    else
+      echo "Caudal PID file is orphan PID : $pid, deleting ..."
+      rm $CAUDAL_HOME/$CAUDAL_NAME.pid 
+    fi
+  fi
+
+  # Check for JAVA
+  echo "Verifying JAVA installation ..."
+  if [[ -n "$JAVA_HOME" ]] && [[ -x "$JAVA_HOME/bin/java" ]];  then
+    JAVA_BIN="$JAVA_HOME/bin/java"
+  elif type -p java; then
+    JAVA_BIN=java
+  else
+    echo "No JAVA installation found, please verify. Exiting ..."
+    exit 1
+  fi
+  echo "Using JVM installed on : $JAVA_BIN ..."
+  
+  # Check version
+  if [[ "$JAVA_BIN" ]]; then
+    JAVA_VERSION=$("$JAVA_BIN" -version 2>&1 | awk -F '"' '/version/ {print $2}')
+    echo "JAVA Version : $JAVA_VERSION"
+    MAYOR_DIGIT=$( echo $JAVA_VERSION | sed -n 's/\([0-9]*\)\..*/\1/p' )
+    if [ $MAYOR_DIGIT -gt "1" ]; then
+      JVM_OPTS="-server -XX:+CMSParallelRemarkEnabled -XX:+AggressiveOpts -XX:+CMSClassUnloadingEnabled -XX:+IgnoreUnrecognizedVMOptions --add-modules=java.xml.bind"
+    else
+      JVM_OPTS="-server -XX:+UseConcMarkSweepGC -XX:+UseParNewGC -XX:+CMSParallelRemarkEnabled -XX:+AggressiveOpts -XX:+UseFastAccessorMethods -XX:+UseCompressedOops -XX:+CMSClassUnloadingEnabled"
+    fi
+  fi
+
+  # Start: normal or daemon mode
+  if [ -z "$CAUDAL_DAEMON" ] ; then
+    $JAVA_BIN -Xms$MININUM_MEMORY -Xmx$MAXIMUM_MEMORY -Duser.timezone=$TIMEZONE $JVM_OPTS -cp "$CAUDAL_LIB" $CAUDAL_STARTER -c $CAUDAL_CONFIG
+  else
+    $JAVA_BIN -Xms$MININUM_MEMORY -Xmx$MAXIMUM_MEMORY -Duser.timezone=$TIMEZONE $JVM_OPTS -cp "$CAUDAL_LIB" $CAUDAL_STARTER -c $CAUDAL_CONFIG 2>&1 &
+
+    retval=$?
+    pid=$!
+
+    echo "Using PID : $pid"
+
+    echo "$pid" > $CAUDAL_HOME/$CAUDAL_NAME.pid
+    [ $retval -eq 0 ] || exit $retval
+    if ! ps -p $pid > /dev/null ; then
+      exit 1
+    fi
+    exit 0
+  fi
+  exit $?
+}
+
+stop() {
+  # Stop: daemon or normal mode
+  if [ -f "$CAUDAL_HOME/$CAUDAL_NAME.pid" ] ; then
+    pid=$( cat $CAUDAL_HOME/$CAUDAL_NAME.pid )
+    kill $pid > /dev/null 2>&1   
+    rm $CAUDAL_HOME/$CAUDAL_NAME.pid
+    while ps -fea | grep $pid | grep $CAUDAL_NAME > /dev/null ; do
+      sleep 1      
+    done
+    echo 
+    exit 0
+  else
+    echo "Unable to find $CAUDAL_HOME/$CAUDAL_NAME.pid"
+    exit 1
+  fi
+}
+
+restart() {
+  # Restarts only in daemon mode
+  CAUDAL_DAEMON=true
+  if [ -f "$CAUDAL_HOME/$CAUDAL_NAME.pid" ] ; then
+    pid=$( cat $CAUDAL_HOME/$CAUDAL_NAME.pid )
+    kill $pid > /dev/null 2>&1
+    rm $CAUDAL_HOME/$CAUDAL_NAME.pid
+    while ps -fea | grep $pid | grep $CAUDAL_NAME > /dev/null ; do
+      sleep 1      
+    done
+    echo 
+    start
+  else
+    echo "Unable to find $CAUDAL_HOME/$CAUDAL_NAME.pid"
+    start
+  fi
+}
+
+usage() {
+    printf "Usage: caudal <option> <command>\n"
+    printf "options:\n"
+    printf "\t-d\tDaemonized option.\n"
+    printf "\t-c\tTakes a custom configuration directory. Overrides CAUDAL_CONFIG environment variable.\n"
+    printf "commands:\n"
+    printf "\tstart\tStarts $CAUDAL_NAME servcie\n"
+    printf "\tstop\tStops $CAUDAL_NAME service using $CAUDAL_HOME/$CAUDAL_NAME.pid\n"
+    printf "\trestart\tStops and Start $CAUDAL_NAME service daemonized\n"
+    printf "example:\n"
+    printf "\tcaudal -c ./config start\n\n"
+    exit 1
+}
+
+while getopts "c:dh" opt; do
+  case $opt in
+    c)
+      CAUDAL_CONFIG=$OPTARG
+      ;;
+    d)
+      CAUDAL_DAEMON=true
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      exit 1
+      ;;
+    :)
+      echo "Option -$OPTARG requires an argument." >&2
+      exit 1
+      ;;
+  esac
+done
+
+shift $(expr $OPTIND - 1 )
+case $1 in
+  start)
+    start
+    ;;
+  stop)
+    stop
+    ;;
+  restart)
+    restart
+    ;;
+  *)
+    usage
+    ;;
+esac
