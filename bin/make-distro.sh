@@ -15,6 +15,7 @@ lein with-profile prod uberjar && \
 rm -rvf $DISTRO_DIR* && \
 mkdir -p $DISTRO_DIR/lib $DISTRO_DIR/config && \
 cp -v target/*standalone.jar $DISTRO_DIR/lib/ && \
+mkdir $DISTRO_DIR/ext/ && \ # external jars
 cp -vr bin $DISTRO_DIR/ && \
 cp -vr resources $DISTRO_DIR/ && \
 cp -v config/caudal-config.clj $DISTRO_DIR/config/ && \
