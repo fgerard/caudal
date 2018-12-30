@@ -6,7 +6,7 @@
 ;   the terms of this license.
 ;   You must not remove this notice, or any other, from this software
 
-(defproject mx.interware/caudal "0.7.15"
+(defproject mx.interware/caudal "0.7.16"
   :description "Caudal Platform"
   :url "http://caudal.io/"
   :license {:name "Eclipse Public License"
@@ -67,7 +67,9 @@
                  [com.draines/postal "2.0.2"]
                  [hiccup "1.0.5"]
                  [hiccups "0.3.0"]
-                 [proto-repl "0.3.1"]]
+                 [proto-repl "0.3.1"]
+
+                 [shams/priority-queue "0.1.2"]]
 
   :main mx.interware.caudal.core.StarterDSL
 

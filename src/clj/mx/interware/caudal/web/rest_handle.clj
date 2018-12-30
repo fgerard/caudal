@@ -28,9 +28,11 @@
   [{:keys [route-params] :as request}]
   (response (str "Item id : " (:id route-params) ", name : " (:name route-params))))
 
+
 (defn event-handler
   [sink request]
   (try
+    ;(println :request request)
     (sink request)
     {:status 202}
     (catch Exception e
