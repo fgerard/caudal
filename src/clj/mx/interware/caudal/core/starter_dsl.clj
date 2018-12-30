@@ -20,7 +20,7 @@
   (defn name&version
     "Returns name and version reading project.clj"
     []
-    [name version]))
+    ["caudal" version]))
 
 (defn- config-file?
   "Return true if a file has .clj or .config extension"
@@ -82,7 +82,7 @@
                         "                                   \n"
                         name " " version " clojure:" (clojure-version) "\n"))]
     (if-let [path (:config opts)]
-      (if ((into #{}(keys opts)) :crypt)
+      (if ((into #{} (keys opts)) :crypt)
         (if-let [pass (:pass opts)]
           (let [conf-str (slurp path)
                 crypt-file (file (str path ".crypt"))]
