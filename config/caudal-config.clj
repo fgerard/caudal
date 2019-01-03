@@ -564,21 +564,21 @@
 ;(println "Initializing secure web @ 8054")
 (web
  {:https-port 8054
-  :server-key "security/innovacion-mx.key"
+  :server-key "resources/security/innovacion-mx.key"
   ;:server-key-pass
-  :server-crt "security/innovacion-mx.crt"
+  :server-crt "resources/security/innovacion-mx.crt"
   :publish-sinks [zurich ]}) ;desastres
 
 (web
  {:https-port 8055
-  :server-key "security/innovacion-mx.key"
+  :server-key "resources/security/innovacion-mx.key"
   ;:server-key-pass
-  :server-crt "security/innovacion-mx.crt"
+  :server-crt "resources/security/innovacion-mx.crt"
   :publish-sinks [prosa ]}) ;desastres
 
 (web
  {:https-port 8056
-  :server-key "security/innovacion-mx.key"
+  :server-key "resources/security/innovacion-mx.key"
   ;:server-key-pass
-  :server-crt "security/innovacion-mx.crt"
+  :server-crt "resources/security/innovacion-mx.crt"
   :publish-sinks [robot-watcher bancomer]})

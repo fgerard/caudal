@@ -10,8 +10,6 @@ export SERVICE_NAME=$( echo $PROJECT | awk '{split($2,t0,"/"); print(t0[2])}' )
 export SERVICE_VERSION=$( echo $PROJECT | awk '{print(substr($3,2,length($3)-2))}' )
 
 echo "Docker build path : $DKR_PATH"
-echo $SERVICE_NAME
-echo $SERVICE_VERSION
 
 # Custom Registry
 #
@@ -28,4 +26,4 @@ export DKR_IMG=$DKR_IMG$SERVICE_NAME:$SERVICE_VERSION
 
 echo $DKR_IMG
 
-cd $ROOT_PATH && lein libdir && lein jar && mv target/$SERVICE_NAME-$SERVICE_VERSION.jar lib && cd .. && tar -czvf $ROOT_PATH/docker/$SERVICE_NAME.tar.gz $SERVICE_NAME/project.clj $SERVICE_NAME/bin $SERVICE_NAME/lib $SERVICE_NAME/config $SERVICE_NAME/caudal-dashboard && cd $DKR_PATH && docker build -t $DKR_IMG .
+cd $ROOT_PATH && bin/make-distro.sh && mv $SERVICE_NAME-$SERVICE_VERSION.tar.gz $DKR_PATH/ && cd $DKR_PATH  && sed -i.bk s/REPLACE_VERSION/$SERVICE_VERSION/g Dockerfile && docker build -t $DKR_IMG .
