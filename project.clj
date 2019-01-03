@@ -58,6 +58,7 @@
                  [jumblerg/ring.middleware.cors "1.0.1"]
 
                  [aleph "0.4.3"]
+                 [clj-http "3.9.1"]
                  [gloss "0.2.5"]
                  [org.immutant/scheduling "2.1.10" :exclusions [ch.qos.logback/logback-classic]]
                  [org.immutant/caching "2.1.10"] ; cambio de version necesario para evitar TLS error

@@ -7,4 +7,10 @@ logs/
 doc/
 *.iml
 .idea/
+*#
+
+# make-distro files
+caudal-*
+resources/public/js/compiled
+
 
