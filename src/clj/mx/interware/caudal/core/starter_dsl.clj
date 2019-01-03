@@ -45,14 +45,12 @@
       (log/error {:loading-dsl {:error (.getMessage e) :file file}}))))
 
 (defn- log4j2-xml
-  "Loads log4j.properties using same parent directory of config file"
+  "Loads log4j2.xml in same directory of config file"
   [path]
   (let [file (file path)
-        prop "log4j2.xml"]
-    (java.io.File.
-     (if (.isDirectory file)
-       (str (-> file .getCanonicalFile .toString) "/" prop)
-       (str (-> file .getParentFile .getCanonicalFile .toString) "/" prop)))))
+        prop "log4j2.xml"
+        d-dir (if (.isDirectory file) file (.getParentFile file))]
+    (java.io.File. d-dir prop)))
 
 (defn- loader
   "Loads DSL file configuration, recursively if is needed"
@@ -93,7 +91,8 @@
             (println "Password needed to encrypt config, use -p")
             (System/exit 1)))
         (do
-          (log/debug :opts (pr-str opts))
+          ;(log/debug :opts (pr-str opts))
+          (println "Configuring log4j2 from:" (.getCanonicalPath (log4j2-xml path)))
           (-> (cast LoggerContext (LogManager/getContext false)) (.setConfigLocation (.toURI (log4j2-xml path))))
           (.addShutdownHook (Runtime/getRuntime) (Thread. #(log/info {:caudal :shudown})))
           (log/info (pr-str {:caudal :start :version version}))
