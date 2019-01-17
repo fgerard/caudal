@@ -88,6 +88,6 @@
 (defmethod start-listener 'mx.interware.caudal.io.tcp-server
   [sink config]
   (let [{:keys [port idle-period parser buffer-size max-line-length]
-         :or {parser read-string buffer-size 4096 max-line-length 3145728}} (get-in config [:parameters])
+         :or {idle-period 60 parser read-string buffer-size 4096 max-line-length 3145728}} (get-in config [:parameters])
         parse-fn     (if (symbol? parser) (resolve&get-fn parser) parser)]
     (start-server port idle-period sink parse-fn buffer-size max-line-length)))
