@@ -406,7 +406,8 @@
     *children*: Streamers to propagate the unchanged event
   "
   [[caudal-host caudal-port max-retries back-pressure-limit] & children]
-  (let [back-pressure-limit (or back-pressure-limit 1000)
+  (let [max-retries         (or max-retries 1)
+        back-pressure-limit (or back-pressure-limit 1000)
         sem                 (java.util.concurrent.Semaphore. back-pressure-limit true)
         socket-conf         (agent {:host caudal-host
                                     :port caudal-port})
