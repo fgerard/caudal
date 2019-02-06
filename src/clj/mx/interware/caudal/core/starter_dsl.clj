@@ -16,7 +16,11 @@
   (:import (org.apache.logging.log4j LogManager)
            (org.apache.logging.log4j.core LoggerContext)))
 
-(let [[_ name version] (-> "./project.clj" slurp read-string vec)]
+(let [[_ name version] (-> (or (System/getenv "CAUDAL_HOME") ".")
+                           (str "/project.clj")
+                           slurp
+                           read-string
+                           vec)]
   (defn name&version
     "Returns name and version reading project.clj"
     []
