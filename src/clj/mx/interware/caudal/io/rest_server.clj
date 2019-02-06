@@ -98,7 +98,9 @@
     (make-handler routes)))
 
 (defn create-app [publisher sink states cors gzip]
-  (let [cors (or cors #".*localhost.*")]
+  (let [cors (or cors #".*localhost.*")
+        public-dir (-> (or (System/getenv "CAUDAL_HOME") ".")
+                       (str "/resources/public/"))]
     (cond-> (create-handler publisher sink states)            
             true (wrap-restful-format :formats [:json-kw :edn])
             ;(wrap-json-response)
@@ -106,7 +108,7 @@
             true (wrap-params)
             publisher (wrap-cors cors)
             publisher wrap-session
-            publisher (wrap-file "resources/public/" {:index-files? true})
+            publisher (wrap-file public-dir {:index-files? true})
             publisher (wrap-content-type {:mime-types {nil "text/html"}})
             gzip (wrap-gzip))))
 
