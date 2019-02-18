@@ -56,9 +56,10 @@
       :component-will-update (fn [_ [_ comp]]
                               (update-fn comp))
       })))
-
-(defn google-v11n-format [data]
-  (let [rates (util/data-by-type data "rate")
+(defn google-v11n-format [data params]
+  (let [{:keys [value-fn image-fn tooltip] :or {value-fn :caudal/height image-fn :caudal/png tooltip [:n]}} (get params (first (ffirst data)))
+        _ (.log js/console (str {:value-fn value-fn :tooltip tooltip}))
+        rates (util/data-by-type data "rate")
         rates (reduce (fn [r [k {:keys [buckets] :as v}]] (if (> (count buckets) 0) (assoc r k v) r)) {} rates) ; Delete empty buckets
         timeline (reduce (fn [r [k {:keys [buckets]}]] (into r (keys buckets))) (sorted-set) rates)
         begin (- (first timeline) (* 30 60 1000)) ; library offset ??
@@ -72,8 +73,8 @@
                      [data screen] (reduce (fn [[data screen] bucket-ts] ; using t, get slices ordered
                                              (let [bucket-data (get buckets bucket-ts)
                                                    time        (js/Date. bucket-ts)
-                                                   value       (:caudal/height bucket-data)]
-                                               [(conj data [time value (util/google-tooltip bucket-ts bucket-data)])
+                                                   value       (value-fn bucket-data)]
+                                               [(conj data [time value (util/google-tooltip bucket-ts bucket-data value-fn image-fn)])
                                                 (or (:caudal/png bucket-data) screen)]))
                                            [[] nil]
                                            timeline)]
@@ -86,7 +87,7 @@
              []
              rates) begin end]))
 
-(defn panel [{:keys [data]} _]
+#_(defn panel [{:keys [data]} _]
   (let [[data begin end] (google-v11n-format data)]
     (into [:div] (map (fn [{:keys [title color screen] :as f}]
                           [:div.row
@@ -110,7 +111,7 @@
                      (map-indexed (fn [i sub-tab]
                                     (let [content (into []
                                                         (map (fn [[group-name data]]
-                                                               (let [[data begin end] (google-v11n-format data)]
+                                                               (let [[data begin end] (google-v11n-format data params)]
                                                                  (into [:div] (map (fn [{:keys [title color screen] :as f}]
                                                                                      [:div.row
                                                                                       [util/panel-color title
