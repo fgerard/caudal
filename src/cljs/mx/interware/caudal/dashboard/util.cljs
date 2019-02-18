@@ -108,11 +108,13 @@
 
   This string contains HTML code, resolved automatically via hiccups/html from hiccup
   "
-  [timestamp slice]
+  [timestamp slice value-fn image-fn]
   (let [formatter  DTF_MEDIUM_DATETIME
         time  (js/Date. timestamp)
-        value (format-num (:caudal/height slice))
-        png   (:caudal/png slice)]
+        value-fn (or value-fn :caudal/height)
+        image-fn (or image-fn :caudal/png)
+        value (format-num (value-fn slice))
+        png   (image-fn slice)]
     (html
      [:table {:class "table" }
       [:tr {:style {:opacity 1}} [:th "timestamp"] [:td (.format formatter time)]]
