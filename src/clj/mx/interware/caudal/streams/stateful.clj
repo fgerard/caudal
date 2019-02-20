@@ -166,14 +166,12 @@
   "
   [[state-key depth priority-fun] & children]
   (let [mutator (->toucher
-                 (fn priority-buff-mutator [{:keys [p-queue d-depth]
-                                             :or {p-queue (pq/priority-queue priority-fun)
-                                                  d-depth 0}} e]
-                   (let [p-queue (conj p-queue e)
-                         d-depth (inc d-depth)]
-                     (if (>= d-depth depth)
-                       {:p-queue (pop p-queue) :next (peek p-queue) :d-depth (dec d-depth)}
-                       {:q-queue p-queue :next nil :d-depth d-depth}))))]
+                 (fn priority-buff-mutator [{:keys [p-queue]
+                                             :or {p-queue (pq/priority-queue priority-fun)}} e]
+                   (let [p-queue2 (conj p-queue e)]
+                     (if (>= (count p-queue2) depth)
+                       {:p-queue (pop p-queue2) :next (peek p-queue2)}
+                       {:p-queue p-queue2 :next nil}))))]
     (fn priority-buff-streamer [by-path state e]
       (let [d-k (key-factory by-path state-key)
             {{:keys [p-queue next]} d-k :as new-state} (update state d-k mutator e)]
