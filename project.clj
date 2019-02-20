@@ -6,7 +6,7 @@
 ;   the terms of this license.
 ;   You must not remove this notice, or any other, from this software
 
-(defproject mx.interware/caudal "0.7.16"
+(defproject mx.interware/caudal "0.7.17"
   :description "Caudal Platform"
   :url "http://caudal.io/"
   :license {:name "Eclipse Public License"

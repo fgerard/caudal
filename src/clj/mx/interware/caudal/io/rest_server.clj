@@ -98,10 +98,15 @@
     (make-handler routes)))
 
 (defn create-app [publisher sink states cors gzip]
+<<<<<<< Updated upstream
   (let [cors (or cors #".*localhost.*")
         public-dir (-> (or (System/getenv "CAUDAL_HOME") ".")
                        (str "/resources/public/"))]
     (cond-> (create-handler publisher sink states)            
+=======
+  (let [cors (or cors #".*localhost.*")]
+    (cond-> (create-handler publisher sink states)
+>>>>>>> Stashed changes
             true (wrap-restful-format :formats [:json-kw :edn])
             ;(wrap-json-response)
             true (wrap-keyword-params)
@@ -112,12 +117,14 @@
             publisher (wrap-content-type {:mime-types {nil "text/html"}})
             gzip (wrap-gzip))))
 
-(defn start-server [app {:keys [http-port https-port server-key server-key-pass server-crt] :as config}]
+(defn start-server [app {:keys [host http-port https-port server-key server-key-pass server-crt] :as config}]
   (if http-port
     (log/info "Starting HTTP Server, port:" http-port))
   (if https-port
     (log/info "Starting HTTPS Server, port:" https-port))
-  (let [ssl-context-builder (and https-port
+  (let [http-server-inet (and http-port (java.net.InetSocketAddress. host http-port))
+        https-server-inet (and https-port (java.net.InetSocketAddress. host https-port))
+        ssl-context-builder (and https-port
                                  server-key
                                  server-crt
                                  (if server-key-pass
@@ -126,12 +133,12 @@
                                                                 server-key-pass)
                                    (SslContextBuilder/forServer (file server-crt)
                                                                 (file server-key))))
-        https-serv (and ssl-context-builder (aleph-http/start-server app {:port https-port :ssl-context (.build ssl-context-builder)}))
-        http-serv (and http-port (aleph-http/start-server app {:port http-port}))]
+        https-serv (and ssl-context-builder (aleph-http/start-server app {:socket-address https-server-inet :ssl-context (.build ssl-context-builder)}))
+        http-serv (and http-port (aleph-http/start-server app {:socket-address http-server-inet}))]
     (if-not http-serv
-      (and http-port (log/error "Can't start HTTP Server, port: " http-port)))
+      (and http-port (log/error "Can't start HTTP Server, host:port -> " host ":" http-port)))
     (if-not https-serv
-      (and https-port (log/error "Can't start HTTPS Server, port: " https-port)))
+      (and https-port (log/error "Can't start HTTPS Server, host:port -> " host ":" https-port)))
     (log/debug {:rest-server config})))
 
 (defn start-rest-listener [sink config]
