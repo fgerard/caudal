@@ -54,7 +54,7 @@
                   (^void sessionOpened [this ^IoSession session]))]
     handler))
 
-(defn start-server [port idle-period sink parse-fn buffer-size max-line-length]
+(defn start-server [host port idle-period sink parse-fn buffer-size max-line-length]
   ;(PropertyConfigurator/configure "log4j.properties")
   (try
     (let [acceptor        (new NioSocketAcceptor)
@@ -66,7 +66,7 @@
           filter-chain    (.getFilterChain acceptor)
           session-config  (.getSessionConfig acceptor)
           handler         (create-handler parse-fn sink)
-          socket-address  (new InetSocketAddress port)
+          socket-address  (new InetSocketAddress host port)
           logging-filter  (doto (new LoggingFilter)
                             (.setMessageReceivedLogLevel LogLevel/DEBUG)
                             (.setMessageSentLogLevel LogLevel/DEBUG)
@@ -87,7 +87,7 @@
 
 (defmethod start-listener 'mx.interware.caudal.io.tcp-server
   [sink config]
-  (let [{:keys [port idle-period parser buffer-size max-line-length]
-         :or {idle-period 60 parser read-string buffer-size 4096 max-line-length 3145728}} (get-in config [:parameters])
+  (let [{:keys [host port idle-period parser buffer-size max-line-length]
+         :or {host "localhost" idle-period 60 parser read-string buffer-size 4096 max-line-length 3145728}} (get-in config [:parameters])
         parse-fn     (if (symbol? parser) (resolve&get-fn parser) parser)]
-    (start-server port idle-period sink parse-fn buffer-size max-line-length)))
+    (start-server host port idle-period sink parse-fn buffer-size max-line-length)))
