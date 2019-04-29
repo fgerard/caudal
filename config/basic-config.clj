@@ -28,5 +28,5 @@
 
 (config-view [example] {:doughnut {:state-counter {:value-fn :n :tooltip [:n]}}})
 
-(web{:http-port 9910
-     :publish-sinks [example]})
+(web {:http-port 9910
+      :publish-sinks [example]})
