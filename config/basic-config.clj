@@ -13,6 +13,7 @@
 ;; Listener
 (deflistener tcp [{:type 'mx.interware.caudal.io.tcp-server
                    :parameters {:parser basic-parser
+                                :host "localhost"
                                 :port 9900
                                 :idle-period 60}}])
 
