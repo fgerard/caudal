@@ -1,10 +1,10 @@
 (ns invex)
 
-(require '[mx.interware.caudal.core.scheduler-server :refer :all])
-(require '[mx.interware.caudal.core.folds :refer :all])
-(require '[mx.interware.caudal.streams.common :refer :all])
-(require '[mx.interware.caudal.streams.stateful :refer :all])
-(require '[mx.interware.caudal.streams.stateless :refer :all])
+(require '[caudal.core.scheduler-server :refer :all])
+(require '[caudal.core.folds :refer :all])
+(require '[caudal.streams.common :refer :all])
+(require '[caudal.streams.stateful :refer :all])
+(require '[caudal.streams.stateless :refer :all])
 
 (defsink invex-stream 100
   (time-stampit [:caudal/ts]
@@ -70,11 +70,11 @@
   (defstream [e]
     (println {:event-1 e})))
 
-(deflistener tcp7777 [{:type 'mx.interware.caudal.io.tcp-server
+(deflistener tcp7777 [{:type 'caudal.io.tcp-server
                        :parameters {:port 7777
                                     :idle-period 60}}])
 
-(deflistener rest9901 [{:type 'mx.interware.caudal.io.rest-server
+(deflistener rest9901 [{:type 'caudal.io.rest-server
                         :parameters {:host "localhost"
                                      :port 9901}}])
 
@@ -85,8 +85,8 @@
         (reset! s l)))))
 
 (deflistener tailer-cathel
-             [{:type 'mx.interware.caudal.io.tailer-server
-               :parameters {:parser      'mx.interware.caudal.test.simple-parser/parse-cathel-line
+             [{:type 'caudal.io.tailer-server
+               :parameters {:parser      'caudal.test.simple-parser/parse-cathel-line
                                           ;:inputs      ["./logs/input1.log" "./logs/input2.log"]
                             :inputs      {:directory  "./logs"
                                           :wildcard   "*txt"
@@ -98,12 +98,12 @@
                             :buffer-size 16384}}])
 
 (deflistener scheduler
-             [{:type 'mx.interware.caudal.core.scheduler-server
+             [{:type 'caudal.core.scheduler-server
                :jobs [{:runit? true
                        :cron-def "0 0 11 ? * MON-FRI"
                        ;:schedule-def {:at (.parse (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ss.SSS") "2017-01-09T18:42:00.000-06:00")}
                        ;{:at (+ (System/currentTimeMillis) 30000)  :every [5 :seconds] :limit 2} ;:in [10 :seconds]
-                       :event-factory 'mx.interware.caudal.core.scheduler-server/state-admin-event-factory
+                       :event-factory 'caudal.core.scheduler-server/state-admin-event-factory
                        :parameters {:cmd :load-history
                                     :path "config/stats-2016"
                                     ;:go-back-millis 86400000 ;ayer
@@ -111,7 +111,7 @@
                                     :key-name "performance"}}
                       {:runit? true
                        :cron-def "0 0/1 * ? * MON-FRI"
-                       :event-factory 'mx.interware.caudal.core.scheduler-server/state-admin-event-factory
+                       :event-factory 'caudal.core.scheduler-server/state-admin-event-factory
                        :parameters {:cmd :dump-state
                                     :versions 3
                                     :dump-file "config/stats/state.edn"}}]}])

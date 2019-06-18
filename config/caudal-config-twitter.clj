@@ -6,19 +6,19 @@
 ;   the terms of this license.
 ;   You must not remove this notice, or any other, from this software
 
-(require '[mx.interware.caudal.streams.common :refer :all])
-(require '[mx.interware.caudal.streams.stateful :refer :all])
-(require '[mx.interware.caudal.streams.stateless :refer :all])
+(require '[caudal.streams.common :refer :all])
+(require '[caudal.streams.stateful :refer :all])
+(require '[caudal.streams.stateless :refer :all])
 
-(require '[mx.interware.caudal.streams.common :refer :all])
-(require '[mx.interware.caudal.streams.stateful :refer :all])
-(require '[mx.interware.caudal.streams.stateless :refer :all])
+(require '[caudal.streams.common :refer :all])
+(require '[caudal.streams.stateful :refer :all])
+(require '[caudal.streams.stateless :refer :all])
 
 (defsink streamer-1 10000
          (counter [:event-counter :count]
                   (printe ["Received event : "])))
 
-(deflistener [{:type       'mx.interware.caudal.io.twitter
+(deflistener [{:type       'caudal.io.twitter
                :parameters {:name            "caudal-client"
                             :consumer-key    "consumer-key"
                             :consumer-secret "consumer-secret"

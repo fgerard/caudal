@@ -1,11 +1,11 @@
 (ns strauz-caudal-agent
   (:require [clojure.tools.logging :as log]
-            [mx.interware.caudal.core.starter]
-            [mx.interware.caudal.core.folds :as folds]
-            [mx.interware.caudal.streams.common :refer [defstream defsink deflistener wire propagate]]
-            [mx.interware.caudal.streams.stateless :refer [by forward printe where smap unfold ->INFO to-file]]
-            [mx.interware.caudal.streams.stateful :refer [batch matcher counter mixer rate welford]]
-            [mx.interware.strauz.monitor.orchestrator-util :as orc-util])
+            [caudal.core.starter]
+            [caudal.core.folds :as folds]
+            [caudal.streams.common :refer [defstream defsink deflistener wire propagate]]
+            [caudal.streams.stateless :refer [by forward printe where smap unfold ->INFO to-file]]
+            [caudal.streams.stateful :refer [batch matcher counter mixer rate welford]]
+            [strauz.monitor.orchestrator-util :as orc-util])
   (:import (java.util Date)))
 
 (defn post-process-workflow [& children]
@@ -46,7 +46,7 @@
                            (printe ["CONTADOR: " :tx :id :xcontador]))
                     (where [:log-date]
                            (orc-util/agent-pre-process
-                            (where [(fn [e] (= (get e :fun) :mx.interware.strauz.orc.core.orchestrator/workflow))]
+                            (where [(fn [e] (= (get e :fun) :strauz.orc.core.orchestrator/workflow))]
                                    ;(printe ["WF -----> event : "])
                                    (matcher [:tx-matcher start-fn end-fn id-fn workflow-time-out :ms]
                                             (where [(fn [e] (not= (get e :ms) :timeout))]
@@ -72,7 +72,7 @@
                                                        ;)
                                                        ;       )
                                                        ))))
-                            (where [(fn [e] (= (get e :fun) :mx.interware.strauz.orc.core.orchestrator/pipeline))]
+                            (where [(fn [e] (= (get e :fun) :strauz.orc.core.orchestrator/pipeline))]
                                    ;(printe ["PP -----> event : "])
                                    (matcher [:tx-matcher start-fn end-fn id-fn pipeline-time-out :ms]
                                             (where [(fn [e] (not= (get e :ms) :timeout))]
@@ -105,8 +105,8 @@
         pipeline-time-out 6000]
     ;[state-key delay ts-key priority-fn] & children
     (where [(fn [e] (or
-                     (= (get e :fun) :mx.interware.strauz.orc.core.orchestrator/workflow)
-                     (= (get e :fun) :mx.interware.strauz.orc.core.orchestrator/pipeline)))]
+                     (= (get e :fun) :strauz.orc.core.orchestrator/workflow)
+                     (= (get e :fun) :strauz.orc.core.orchestrator/pipeline)))]
            (orc-util/agent-pre-process
             (counter [:foliador :folio]
                      (mixer [:mezclador 500 :ms :folio]
@@ -117,8 +117,8 @@
                                  (println (:folio e))))
                              (to-file ["salida.log.edn" :all]))))))))
 
-(deflistener tailer [{:type       'mx.interware.caudal.io.tailer-server
-                      :parameters {:parser      'mx.interware.strauz.monitor.orchestrator-util/parse-orchestrator-line
+(deflistener tailer [{:type       'caudal.io.tailer-server
+                      :parameters {:parser      'strauz.monitor.orchestrator-util/parse-orchestrator-line
                                    :inputs      {:directory "./logs"
                                                  :wildcard  "*.log"}
                                    :delta       500
@@ -126,8 +126,8 @@
                                    :reopen      true
                                    :buffer-size 16384}}])
 
-(comment deflistener tmixer [{:type       'mx.interware.caudal.io.tailer-server
-                      :parameters {:parser      'mx.interware.strauz.monitor.orchestrator-util/parse-orchestrator-line
+(comment deflistener tmixer [{:type       'caudal.io.tailer-server
+                      :parameters {:parser      'strauz.monitor.orchestrator-util/parse-orchestrator-line
                                    :inputs      {:directory "./logs"
                                                  :wildcard  "strauz-orc-*.log-yy"}
                                    :delta       500
@@ -136,15 +136,15 @@
                                    :buffer-size 16384}}])
 
 
-(deflistener tcp-listener [{:type       'mx.interware.caudal.io.tcp-server
+(deflistener tcp-listener [{:type       'caudal.io.tcp-server
                             :parameters {:port        8062
                                          :idle-period 300}}])
 
-(deflistener rest-listener [{:type       'mx.interware.caudal.io.rest-server
+(deflistener rest-listener [{:type       'caudal.io.rest-server
                              :parameters {:port        8099
                                           :cors #".*"
                                           :idle-period 300}}])
-(deflistener rest-listener2 [{:type       'mx.interware.caudal.io.rest-server
+(deflistener rest-listener2 [{:type       'caudal.io.rest-server
                              :parameters {:port        8098
                                           :idle-period 300}}])
             ;tcp-listener

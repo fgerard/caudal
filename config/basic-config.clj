@@ -1,17 +1,17 @@
 ;; Requires
 (ns caudal.config.basic
   (:require
-   [mx.interware.caudal.io.rest-server :refer :all]
-   [mx.interware.caudal.streams.common :refer :all]
-   [mx.interware.caudal.streams.stateful :refer :all]
-   [mx.interware.caudal.streams.stateless :refer :all]))
+   [caudal.io.rest-server :refer :all]
+   [caudal.streams.common :refer :all]
+   [caudal.streams.stateful :refer :all]
+   [caudal.streams.stateless :refer :all]))
 
 ;; Parser
 (defn basic-parser[incoming-data]
   {:message incoming-data})
 
 ;; Listener
-(deflistener tcp [{:type 'mx.interware.caudal.io.tcp-server
+(deflistener tcp [{:type 'caudal.io.tcp-server
                    :parameters {:parser basic-parser
                                 :host "localhost"
                                 :port 9900

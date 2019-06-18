@@ -12,13 +12,13 @@
    [clojure.string :as S]
    [clojure.tools.logging :as log]
    [clojure.java.shell :as sh]
-   [mx.interware.caudal.streams.common :refer :all]
-   [mx.interware.caudal.io.rest-server :refer :all]
-   [mx.interware.caudal.streams.stateful :refer :all]
-   [mx.interware.caudal.streams.stateless :refer :all]
-   [mx.interware.caudal.io.email :refer [mailer]]
-   [mx.interware.caudal.core.folds :refer [rate-bucket-welford]]
-   [mx.interware.caudal.util.date-util :as DU]
+   [caudal.streams.common :refer :all]
+   [caudal.io.rest-server :refer :all]
+   [caudal.streams.stateful :refer :all]
+   [caudal.streams.stateless :refer :all]
+   [caudal.io.email :refer [mailer]]
+   [caudal.core.folds :refer [rate-bucket-welford]]
+   [caudal.util.date-util :as DU]
    [clara.rules :refer :all]
    [clara.rules.accumulators :as acc]
    [clara.tools.tracing :as tracing]))
@@ -286,7 +286,7 @@
     (.write out (str (pr-str event) "\n")))
   event)
 
-(deflistener rest-server [{:type 'mx.interware.caudal.io.rest-server
+(deflistener rest-server [{:type 'caudal.io.rest-server
                            :parameters {:host "localhost"
                                         :http-port 8070
                                         :cors #".*"}}])

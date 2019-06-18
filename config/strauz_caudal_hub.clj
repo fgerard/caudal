@@ -1,12 +1,12 @@
 (ns strauz-caudal-hub
-  (:require [mx.interware.caudal.core.starter]
-            [mx.interware.caudal.streams.common :refer [defstream defsink deflistener wire propagate]]
-            [mx.interware.caudal.core.folds :as folds]
-            [mx.interware.caudal.streams.stateful :refer [acum-stats batch counter dump-every ewma-timeless matcher mixer]]
-            [mx.interware.caudal.streams.stateless :refer [anomaly-by-stdev by decorate default to-file forward printe smap remove! split store! time-stampit unfold where with ->INFO]]
-            [mx.interware.caudal.io.elastic :refer [elastic-store!]]
-            [mx.interware.caudal.util.id-util :refer [key-juxt]]
-            [mx.interware.strauz.monitor.orchestrator-util :as orc-util]
+  (:require [caudal.core.starter]
+            [caudal.streams.common :refer [defstream defsink deflistener wire propagate]]
+            [caudal.core.folds :as folds]
+            [caudal.streams.stateful :refer [acum-stats batch counter dump-every ewma-timeless matcher mixer]]
+            [caudal.streams.stateless :refer [anomaly-by-stdev by decorate default to-file forward printe smap remove! split store! time-stampit unfold where with ->INFO]]
+            [caudal.io.elastic :refer [elastic-store!]]
+            [caudal.util.id-util :refer [key-juxt]]
+            [strauz.monitor.orchestrator-util :as orc-util]
             [clojure.tools.logging :as log])
   (:import (java.text SimpleDateFormat)
            (java.util Date)))
@@ -39,11 +39,11 @@
                                                 (elastic-store! [es-url es-index es-mapping-name es-mapping es-opts]))))))))
 
 
-(deflistener tcp-listener [{:type       'mx.interware.caudal.io.tcp-server
+(deflistener tcp-listener [{:type       'caudal.io.tcp-server
                             :parameters {:port        8064
                                          :idle-period 300}}])
 
-(deflistener rest-server [{:type       'mx.interware.caudal.io.rest-server
+(deflistener rest-server [{:type       'caudal.io.rest-server
                            :parameters {:host "localhost"
                                         :port 8063}}])
 
