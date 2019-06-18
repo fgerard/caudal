@@ -1,5 +1,5 @@
-(ns mx.interware.caudal.io.syslog-server-test
-  (:use mx.interware.caudal.io.syslog-server
+(ns caudal.io.syslog-server-test
+  (:use caudal.io.syslog-server
         clojure.test)
   (:require [clojure.tools.logging :as log])
   (:import

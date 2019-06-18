@@ -1,14 +1,14 @@
-(ns mx.interware.caudal.streams.stateless-test
+(ns caudal.streams.stateless-test
   (:require [clojure.java.io :as io]
             [clojure.test :refer [deftest is with-test]]
-            [mx.interware.caudal.core.atom-state :as atom-state]
-            [mx.interware.caudal.core.state :as state]
-            [mx.interware.caudal.streams.common :as common :refer [caudal-state-as-map create-sink defstream]]
-            [mx.interware.caudal.streams.stateful :refer [batch counter]]
-            [mx.interware.caudal.streams.stateless :refer [anomaly-by-stdev anomaly-by-percentile by decorate default forward join printe percentiles store! remove! smap split time-stampit to-file where with]]
-            [mx.interware.caudal.util.caudal-util :refer [create-caudal-agent printp]]
-            [mx.interware.caudal.util.date-util :as date-util]
-            [mx.interware.caudal.util.test-util :refer [clean-event print-header]])
+            [caudal.core.atom-state :as atom-state]
+            [caudal.core.state :as state]
+            [caudal.streams.common :as common :refer [caudal-state-as-map create-sink defstream]]
+            [caudal.streams.stateful :refer [batch counter]]
+            [caudal.streams.stateless :refer [anomaly-by-stdev anomaly-by-percentile by decorate default forward join printe percentiles store! remove! smap split time-stampit to-file where with]]
+            [caudal.util.caudal-util :refer [create-caudal-agent printp]]
+            [caudal.util.date-util :as date-util]
+            [caudal.util.test-util :refer [clean-event print-header]])
   (:import (org.apache.commons.io FileUtils)))
 
 (def default-test-1

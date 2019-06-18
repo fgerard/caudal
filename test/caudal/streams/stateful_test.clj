@@ -1,13 +1,13 @@
-(ns mx.interware.caudal.streams.stateful-test
+(ns caudal.streams.stateful-test
   (:require [clojure.test :refer [deftest is with-test]]
             [clojure.pprint :refer [pprint]]
-            [mx.interware.caudal.streams.common :refer [create-sink caudal-state-as-map defstream using-path]]
-            [mx.interware.caudal.streams.stateful :refer [batch changed counter dump-every ewma-timeless matcher mixer moving-time-window rate reduce-with welford]]
-            [mx.interware.caudal.streams.stateless :refer [by decorate default join ->INFO percentiles store! remove! smap]]
-            [mx.interware.caudal.core.state :as state]
-            [mx.interware.caudal.core.atom-state :as atom-state]
-            [mx.interware.caudal.util.caudal-util :as util :refer [create-caudal-agent printp]]
-            [mx.interware.caudal.util.test-util :refer [clean-event print-header]]))
+            [caudal.streams.common :refer [create-sink caudal-state-as-map defstream using-path]]
+            [caudal.streams.stateful :refer [batch changed counter dump-every ewma-timeless matcher mixer moving-time-window rate reduce-with welford]]
+            [caudal.streams.stateless :refer [by decorate default join ->INFO percentiles store! remove! smap]]
+            [caudal.core.state :as state]
+            [caudal.core.atom-state :as atom-state]
+            [caudal.util.caudal-util :as util :refer [create-caudal-agent printp]]
+            [caudal.util.test-util :refer [clean-event print-header]]))
 
 (org.apache.log4j.BasicConfigurator/configure)
 
@@ -178,8 +178,8 @@
                                 (repeat 7 [{:tx "tx2" :host "h1"}])
                                 (repeat 8 [{:tx "tx2" :host "h2"}])))))
         streams  (using-path
-                   [mx.interware.caudal.streams.stateless]
-                   mx.interware.caudal.streams.stateful
+                   [caudal.streams.stateless]
+                   caudal.streams.stateful
                    (default [:ttl -1]
                             (by [:tx]
                                 (counter [:n]

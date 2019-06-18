@@ -1,11 +1,11 @@
-(ns mx.interware.caudal.io.email-test
+(ns caudal.io.email-test
   (:require [clojure.test :refer [deftest is]]
             [hiccup.core :as hiccup :refer [html]]
-            [mx.interware.caudal.io.email :as email]
-            [mx.interware.caudal.streams.common :as common]
-            [mx.interware.caudal.streams.stateful :as stateful]
-            [mx.interware.caudal.streams.stateless :as stateless]
-            [mx.interware.caudal.util.caudal-util :as util]))
+            [caudal.io.email :as email]
+            [caudal.streams.common :as common]
+            [caudal.streams.stateful :as stateful]
+            [caudal.streams.stateless :as stateless]
+            [caudal.util.caudal-util :as util]))
 
 (deftest test-make-header
   (is (= (email/make-header "bonjour!")
