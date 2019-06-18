@@ -11,13 +11,13 @@
    [clojure.java.io :as io]
    [clojure.string :as S]
    [clojure.tools.logging :as log]
-   [mx.interware.caudal.streams.common :refer :all]
-   [mx.interware.caudal.io.rest-server :refer :all]
-   [mx.interware.caudal.streams.stateful :refer :all]
-   [mx.interware.caudal.streams.stateless :refer :all]
-   [mx.interware.caudal.io.email :refer [mailer]]
-   [mx.interware.caudal.core.folds :refer [rate-bucket-welford]]
-   [mx.interware.caudal.util.date-util :as DU]
+   [caudal.streams.common :refer :all]
+   [caudal.io.rest-server :refer :all]
+   [caudal.streams.stateful :refer :all]
+   [caudal.streams.stateless :refer :all]
+   [caudal.io.email :refer [mailer]]
+   [caudal.core.folds :refer [rate-bucket-welford]]
+   [caudal.util.date-util :as DU]
    [clara.rules :refer :all]
    [clara.rules.accumulators :as acc]
    [clara.tools.tracing :as tracing])
@@ -49,11 +49,11 @@
             :comm comm
             :phase phase} (msg-fn message))))
 
-(comment deflistener tcp [{:type 'mx.interware.caudal.io.tcp-server
+(comment deflistener tcp [{:type 'caudal.io.tcp-server
                    :parameters {:port 8052
                    :idle-period 60}}])
 
-(deflistener dp-log [{:type 'mx.interware.caudal.io.tailer-server
+(deflistener dp-log [{:type 'caudal.io.tailer-server
                       :parameters {:parser     dp-parser
                                    :inputs      {:directory  "./logs-zurich/"
                                                  :wildcard   "dp-develop.log"

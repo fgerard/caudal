@@ -12,13 +12,13 @@
    [clojure.string :as S]
    [clojure.tools.logging :as log]
    [clojure.java.shell :as sh]
-   [mx.interware.caudal.streams.common :refer :all]
-   [mx.interware.caudal.io.rest-server :refer :all]
-   [mx.interware.caudal.streams.stateful :refer :all]
-   [mx.interware.caudal.streams.stateless :refer :all]
-   [mx.interware.caudal.io.email :refer [mailer]]
-   [mx.interware.caudal.core.folds :refer [rate-bucket-welford]]
-   [mx.interware.caudal.util.date-util :as DU]
+   [caudal.streams.common :refer :all]
+   [caudal.io.rest-server :refer :all]
+   [caudal.streams.stateful :refer :all]
+   [caudal.streams.stateless :refer :all]
+   [caudal.io.email :refer [mailer]]
+   [caudal.core.folds :refer [rate-bucket-welford]]
+   [caudal.util.date-util :as DU]
    [clara.rules :refer :all]
    [clara.rules.accumulators :as acc]
    [clara.tools.tracing :as tracing]))
@@ -116,25 +116,25 @@
        :report-ts report-ts
        :image-url image-url})))
 
-(deflistener tcp-bbva [{:type 'mx.interware.caudal.io.tcp-server
+(deflistener tcp-bbva [{:type 'caudal.io.tcp-server
                         :parameters {:port 8051
                                      :idle-period 60}}])
 
-(deflistener tcp [{:type 'mx.interware.caudal.io.tcp-server
+(deflistener tcp [{:type 'caudal.io.tcp-server
                    :parameters {:port 8052
                    :idle-period 60}}])
 
-(deflistener tcp-prosa [{:type 'mx.interware.caudal.io.tcp-server
+(deflistener tcp-prosa [{:type 'caudal.io.tcp-server
                          :parameters {:port 8053
                                       :idle-period 60}}])
 
 
-(deflistener rest  [{:type 'mx.interware.caudal.io.rest-server
+(deflistener rest  [{:type 'caudal.io.rest-server
                      :parameters {:host "localhost"
                                   :http-port 8058
                                   :cors #".*"}}])
 
-(deflistener twitter [{:type       'mx.interware.caudal.io.twitter
+(deflistener twitter [{:type       'caudal.io.twitter
                        :parameters {:name            "Caudal_IW"
                                     :consumer-key    "ploTkxtq4acmSZenpBKUC5lSD"
                                     :consumer-secret "9McJ4fL2W6jgsNprHbTJbjhXEy9ohNILYPYxPjVm1KdIqRr88J"
@@ -143,12 +143,12 @@
                                     :terms           ["#estoybien19s"]}}])
 
 (deflistener cleaner
-             [{:type 'mx.interware.caudal.core.scheduler-server
+             [{:type 'caudal.core.scheduler-server
                :jobs [{:runit? true
                        :cron-def "0 0/10 * ? * *"
                        ;:schedule-def {:at (.parse (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ss.SSS") "2017-01-09T18:42:00.000-06:00")}
                        ;{:at (+ (System/currentTimeMillis) 30000)  :every [5 :seconds] :limit 2} ;:in [10 :seconds]
-                       :event-factory 'mx.interware.caudal.core.scheduler-server/state-admin-event-factory
+                       :event-factory 'caudal.core.scheduler-server/state-admin-event-factory
                        :parameters {:cmd :purge-state!
                                     :selector (fn [[_ {type :caudal/type}]]
                                                 (and (= type "rate")))
@@ -158,7 +158,7 @@
                        :cron-def "0 0 0/1 ? * *"
                        ;:schedule-def {:at (.parse (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ss.SSS") "2017-01-09T18:42:00.000-06:00")}
                        ;{:at (+ (System/currentTimeMillis) 30000)  :every [5 :seconds] :limit 2} ;:in [10 :seconds]
-                       :event-factory 'mx.interware.caudal.core.scheduler-server/state-admin-event-factory
+                       :event-factory 'caudal.core.scheduler-server/state-admin-event-factory
                        :parameters {:cmd :purge-state!
                                     :selector (fn [[state-k {type :caudal/type touched :caudal/created}]]
                                                 (and (= type "counter")
@@ -173,7 +173,7 @@
                        :cron-def "0 0 0/1 ? * *"
                        ;:schedule-def {:at (.parse (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ss.SSS") "2017-01-09T18:42:00.000-06:00")}
                        ;{:at (+ (System/currentTimeMillis) 30000)  :every [5 :seconds] :limit 2} ;:in [10 :seconds]
-                       :event-factory 'mx.interware.caudal.core.scheduler-server/state-admin-event-factory
+                       :event-factory 'caudal.core.scheduler-server/state-admin-event-factory
                        :parameters {:cmd :purge-state!
                                     :selector (fn [[state-k {type :caudal/type touched :caudal/created}]]
                                                 (and (= type "welford")))
@@ -184,7 +184,7 @@
                        :cron-def "0 0 0/1 ? * *"
                        ;:schedule-def {:at (.parse (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ss.SSS") "2017-01-09T18:42:00.000-06:00")}
                        ;{:at (+ (System/currentTimeMillis) 30000)  :every [5 :seconds] :limit 2} ;:in [10 :seconds]
-                       :event-factory 'mx.interware.caudal.core.scheduler-server/state-admin-event-factory
+                       :event-factory 'caudal.core.scheduler-server/state-admin-event-factory
                        :parameters {:cmd :purge-state!
                                     :selector (fn [[state-k {type :caudal/type}]]
                                                 (and (= type "counter") (vector? state-k) (= (first state-k) :results)))
@@ -195,16 +195,16 @@
                                     }}
                       {:runit? true
                        :cron-def "0 0 0/1 ? * *"
-                       :event-factory 'mx.interware.caudal.core.scheduler-server/state-admin-event-factory
+                       :event-factory 'caudal.core.scheduler-server/state-admin-event-factory
                        :parameters {:cmd :dump-state
                                     :versions 3
                                     :dump-file "config/stats/state.edn"}}]}])
 
 (deflistener robot-nurce
-             [{:type 'mx.interware.caudal.core.scheduler-server
+             [{:type 'caudal.core.scheduler-server
                :jobs [{:runit? true
                        :cron-def "0 0/1 * ? * *"
-                       :event-factory 'mx.interware.caudal.core.scheduler-server/state-admin-event-factory
+                       :event-factory 'caudal.core.scheduler-server/state-admin-event-factory
                        :parameters {:port 8050
                                     :host "localhost"
                                     :start-cmd [["bash" "-c" "ps -ef | grep java | grep robot | awk '{system(\"kill -9 \"  $2)}'" :dir "../iw-robot/"]
@@ -216,12 +216,12 @@
                                                 ["bash" "-c" "bin/run-headless.sh 1>nohup2.out 2>&1 & \n echo $!"  :dir "../iw-robot/"]]}}]}])
 
 (deflistener ongoing-problem
-             [{:type 'mx.interware.caudal.core.scheduler-server
+             [{:type 'caudal.core.scheduler-server
                :jobs [{:runit? true
                        :cron-def "0 0 */1 ? * *"
                        ;:schedule-def {:at (.parse (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ss.SSS") "2017-01-09T18:42:00.000-06:00")}
                        ;{:at (+ (System/currentTimeMillis) 30000)  :every [5 :seconds] :limit 2} ;:in [10 :seconds]
-                       :event-factory 'mx.interware.caudal.core.scheduler-server/state-admin-event-factory
+                       :event-factory 'caudal.core.scheduler-server/state-admin-event-factory
                        :parameters {;:cmd :send2streams!
                                     :userid "ongoing"
                                     :name "(SCHEDULED)"
