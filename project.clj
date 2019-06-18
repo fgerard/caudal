@@ -6,7 +6,7 @@
 ;   the terms of this license.
 ;   You must not remove this notice, or any other, from this software
 
-(defproject mx.interware/caudal "0.7.17"
+(defproject caudal "0.7.17"
   :description "Caudal Platform"
   :url "http://caudal.io/"
   :license {:name "Eclipse Public License"
@@ -72,7 +72,7 @@
 
                  [shams/priority-queue "0.1.2"]]
 
-  :main mx.interware.caudal.core.StarterDSL
+  :main caudal.core.StarterDSL
 
   :jvm-opts ~(concat
                ; Normal JVM opts to pass in
@@ -89,7 +89,7 @@
 
   :repl-options {:prompt (fn [ns] (str "<" ns "> "))
                  :welcome (println "Welcome to the magical world of the repl!")
-                 :init-ns mx.interware.caudal.core.starter-dsl}
+                 :init-ns caudal.core.starter-dsl}
 
   :source-paths ["src/clj"]
   :test-paths ["test"]
@@ -111,8 +111,8 @@
   {:builds
    [{:id           "dev"
      :source-paths ["src/cljs"]
-     :figwheel     {:on-jsload "mx.interware.caudal.dashboard.core/mount-root"}
-     :compiler     {:main                 mx.interware.caudal.dashboard.core
+     :figwheel     {:on-jsload "caudal.dashboard.core/mount-root"}
+     :compiler     {:main                 caudal.dashboard.core
                     :output-to            "resources/public/js/compiled/caudal-dashboard.js"
                     :output-dir           "resources/public/js/compiled/out"
                     :asset-path           "js/compiled/out"
@@ -123,7 +123,7 @@
 
     {:id           "prod"
      :source-paths ["src/cljs"]
-     :compiler     {:main            mx.interware.caudal.dashboard.core
+     :compiler     {:main            caudal.dashboard.core
                     :output-to       "resources/public/js/compiled/caudal-dashboard.js"
                     :optimizations   :advanced
                     :closure-defines {goog.DEBUG false}
@@ -135,33 +135,33 @@
   :codox {:defaults {:doc/format :markdown}}
   :aot :all
 
-;  [mx.interware.caudal.core.global
-;   mx.interware.caudal.core.main
-;   mx.interware.caudal.core.starter
-;   mx.interware.caudal.core.starter-dsl
-;   mx.interware.caudal.core.state
-;   mx.interware.caudal.streams.common
-;   mx.interware.caudal.streams.stateless
-;   mx.interware.caudal.streams.stateful
-;   mx.interware.caudal.io.client
-;   mx.interware.caudal.io.elastic
-;   mx.interware.caudal.io.email
-;   mx.interware.caudal.io.server
-;   mx.interware.caudal.io.tcp-server
-;   mx.interware.caudal.io.tailer-server
-;   mx.interware.caudal.io.log4j-server
-;   mx.interware.caudal.io.syslog-server
-;   mx.interware.caudal.io.twitter
-;   mx.interware.caudal.io.rest-server
-;   mx.interware.caudal.io.dashboard-server
-;   mx.interware.caudal.core.scheduler-server
-;   mx.interware.caudal.core.folds
-;   mx.interware.caudal.util.crypt-util
-;   mx.interware.caudal.util.date-util
-;   mx.interware.caudal.util.id-util
-;   mx.interware.caudal.util.rest-util
+;  [caudal.core.global
+;   caudal.core.main
+;   caudal.core.starter
+;   caudal.core.starter-dsl
+;   caudal.core.state
+;   caudal.streams.common
+;   caudal.streams.stateless
+;   caudal.streams.stateful
+;   caudal.io.client
+;   caudal.io.elastic
+;   caudal.io.email
+;   caudal.io.server
+;   caudal.io.tcp-server
+;   caudal.io.tailer-server
+;   caudal.io.log4j-server
+;   caudal.io.syslog-server
+;   caudal.io.twitter
+;   caudal.io.rest-server
+;   caudal.io.dashboard-server
+;   caudal.core.scheduler-server
+;   caudal.core.folds
+;   caudal.util.crypt-util
+;   caudal.util.date-util
+;   caudal.util.id-util
+;   caudal.util.rest-util
 ;
-;   mx.interware.caudal.streams.stateless-test
-;   mx.interware.caudal.streams.stateful-test]
+;   caudal.streams.stateless-test
+;   caudal.streams.stateful-test]
 
   )
