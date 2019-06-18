@@ -1,7 +1,7 @@
 FROM openjdk:10-jre-slim
 
-LABEL creator Daniel Estevez <destevez@interware.com.mx>
-MAINTAINER Daniel Estevez <destevez@interware.com.mx>
+LABEL creator Daniel Estevez <destevez@quantumlabs.ai.com.mx>
+MAINTAINER Daniel Estevez <destevez@quantumlabs.ai.com.mx>
 
 ENV PACKAGE_NAME=caudal \
     PACKAGE_VERSION=REPLACE_VERSION
