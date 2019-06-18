@@ -43,7 +43,7 @@ fi
 
 # Caudal name & Java Class to start
 export CAUDAL_NAME=caudal
-export CAUDAL_STARTER=mx.interware.caudal.core.StarterDSL
+export CAUDAL_STARTER=caudal.core.StarterDSL
 
 start() {
 

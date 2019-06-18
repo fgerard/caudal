@@ -24,6 +24,6 @@ echo "Starting Caudal from $ROOT_PATH"
 
 export caudal_lib_name=`ls lib/caudal*`
 
-#$JAVA_BIN -Djava.ext.dirs=lib mx.interware.caudal.core.StarterDSL "$@"
-#/usr/lib/jvm/java-1.8.0-openjdk-amd64/bin/java -cp $caudal_lib_name mx.interware.caudal.core.StarterDSL "$@"
-nohup $JAVA_BIN -cp "./lib/*" mx.interware.caudal.core.StarterDSL "$@" &
+#$JAVA_BIN -Djava.ext.dirs=lib caudal.core.StarterDSL "$@"
+#/usr/lib/jvm/java-1.8.0-openjdk-amd64/bin/java -cp $caudal_lib_name caudal.core.StarterDSL "$@"
+nohup $JAVA_BIN -cp "./lib/*" caudal.core.StarterDSL "$@" &
