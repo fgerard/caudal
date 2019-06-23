@@ -1,10 +1,9 @@
 FROM openjdk:10-jre-slim
 
-LABEL creator Daniel Estevez <destevez@quantumlabs.ai.com.mx>
-MAINTAINER Daniel Estevez <destevez@quantumlabs.ai.com.mx>
+MAINTAINER Daniel Estevez <destevez@quantumlabs.ai>
 
 ENV PACKAGE_NAME=caudal \
-    PACKAGE_VERSION=REPLACE_VERSION
+    PACKAGE_VERSION=0.7.17
 
 ENV CAUDAL_HOME=/home/${PACKAGE_NAME} \
     CAUDAL_EXT=/home/${PACKAGE_NAME}/ext \
