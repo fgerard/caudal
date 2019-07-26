@@ -106,11 +106,11 @@
             ;(wrap-json-response)
             true (wrap-keyword-params)
             true (wrap-params)
-            publisher (wrap-cors cors)
             publisher wrap-session
-            publisher (wrap-file public-dir {:index-files? true})
+            publisher (wrap-file public-dir {:index-files? true :allow-symlinks? true})
             publisher (wrap-content-type {:mime-types {nil "text/html"}})
-            gzip (wrap-gzip))))
+            gzip (wrap-gzip)
+            publisher (wrap-cors cors))))
 
 (defn start-server [app {:keys [host http-port https-port server-key server-key-pass server-crt] :as config}]
   (if http-port
