@@ -3,7 +3,7 @@ FROM openjdk:10-jre-slim
 MAINTAINER Daniel Estevez <destevez@quantumlabs.ai>
 
 ENV PACKAGE_NAME=caudal \
-    PACKAGE_VERSION=0.7.17
+    PACKAGE_VERSION=REPLACE_VERSION
 
 ENV CAUDAL_HOME=/home/${PACKAGE_NAME} \
     CAUDAL_EXT=/home/${PACKAGE_NAME}/ext \
