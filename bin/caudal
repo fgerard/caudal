@@ -21,12 +21,17 @@ if test -z "$CAUDAL_HOME"; then
   export CAUDAL_HOME=$(dirname $CAUDAL_BIN)
 fi
 
-if test -z "$CAUDAL_LIB"; then
-  export CAUDAL_LIB=$CAUDAL_HOME/lib/*:$CAUDAL_HOME/target/*:$CAUDAL_HOME/ext/*
-fi
-
 if test -z "$CAUDAL_CONFIG"; then
   export CAUDAL_CONFIG=$CAUDAL_HOME/config
+fi
+
+if test -z "$CAUDAL_LIB"; then
+  export CAUDAL_LIB=$CAUDAL_HOME/lib/*:$CAUDAL_HOME/target/*:$CAUDAL_HOME/ext/*
+  if test -d "$CAUDAL_CONFIG"; then
+    export CAUDAL_LIB=$CAUDAL_LIB:$CAUDAL_CONFIG
+  elif test -f "$CAUDAL_CONFIG"; then
+    export CAUDAL_LIB=$CAUDAL_LIB:$( dirname $CAUDAL_CONFIG )
+  fi
 fi
 
 if test -z "$MININUM_MEMORY"; then
