@@ -22,8 +22,8 @@ if [ -z ${DKR_HOST} ] || [ -z ${DKR_PORT} ] || [ -z ${DKR_NAMESPACE} ]; then
 else
   export DKR_IMG=$DKR_HOST:$DKR_PORT/$DKR_GROUP
 fi
-export DKR_IMG=$DKR_IMG$SERVICE_NAME:$SERVICE_VERSION
+export DKR_IMG=$SERVICE_NAME:$SERVICE_VERSION
 
 echo $DKR_IMG
 
-cd $ROOT_PATH && bin/make-distro.sh && mv $SERVICE_NAME-$SERVICE_VERSION.tar.gz $DKR_PATH/ && cd $DKR_PATH  && sed -i.bk s/REPLACE_VERSION/$SERVICE_VERSION/g Dockerfile && docker build -t $DKR_IMG .
+cd $ROOT_PATH && bin/make-distro.sh && rm -fv $DKR_PATH/$SERVICE_NAME-$SERVICE_VERSION.tar.gz && mv $SERVICE_NAME-$SERVICE_VERSION.tar.gz $DKR_PATH/ && git checkout $DKR_PATH/Dockerfile && cd $DKR_PATH  && sed -i.bk s/REPLACE_VERSION/$SERVICE_VERSION/g Dockerfile && docker build -t $DKR_IMG .
