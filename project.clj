@@ -12,7 +12,6 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
 
-
   :plugins      [[lein-libdir "0.1.1"]
                  [codox "0.8.10"]
                  [lein-cljsbuild "1.1.4"]]
@@ -55,9 +54,13 @@
                  [ring/ring-core "1.6.2"]
                  [ring-middleware-format "0.7.2"]
                  [amalloy/ring-gzip-middleware "0.1.3"]
-                 [jumblerg/ring.middleware.cors "1.0.1"]
+                 ;[jumblerg/ring.middleware.cors "1.0.1"]
+                 ;[jumblerg/ring-cors "2.0.0"]
+                 [ring-cors "0.1.13"]
+                 ;[com.unbounce/encors "2.4.0"]
 
-                 [aleph "0.4.3"]
+
+                 [aleph "0.4.6"]
                  [clj-http "3.9.1"]
                  [gloss "0.2.5"]
                  [org.immutant/scheduling "2.1.10" :exclusions [ch.qos.logback/logback-classic]]
@@ -69,6 +72,7 @@
                  [hiccup "1.0.5"]
                  [hiccups "0.3.0"]
                  [proto-repl "0.3.1"]
+                 [com.rpl/specter "1.1.2"]
 
                  [shams/priority-queue "0.1.2"]]
 
