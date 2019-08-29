@@ -110,7 +110,8 @@
             publisher (wrap-file public-dir {:index-files? true :allow-symlinks? true})
             publisher (wrap-content-type {:mime-types {nil "text/html"}})
             gzip (wrap-gzip)
-            publisher (wrap-cors cors))))
+            publisher (wrap-cors :access-control-allow-origin [cors]
+                                 :access-control-allow-methods [:get]))))
 
 (defn start-server [app {:keys [host http-port https-port server-key server-key-pass server-crt] :as config}]
   (if http-port
