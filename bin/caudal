@@ -34,8 +34,8 @@ if test -z "$CAUDAL_LIB"; then
   fi
 fi
 
-if test -z "$MININUM_MEMORY"; then
-  export MININUM_MEMORY=1024m
+if test -z "$MINIMUM_MEMORY"; then
+  export MINIMUM_MEMORY=1024m
 fi
 
 if test -z "$MAXIMUM_MEMORY"; then
