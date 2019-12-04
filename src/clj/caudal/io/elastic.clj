@@ -6,11 +6,11 @@
 ;   the terms of this license.
 ;   You must not remove this notice, or any other, from this software
 
-(ns mx.interware.caudal.io.elastic
+(ns caudal.io.elastic
   (:require [clojure.tools.logging :as log]
             [clojure.data.json :as json]
-            [mx.interware.caudal.util.id-util :as id-util]
-            [mx.interware.caudal.streams.common :refer [propagate]]
+            [caudal.util.id-util :as id-util]
+            [caudal.streams.common :refer [propagate]]
             [clojurewerkz.elastisch.rest :as esr]
             [clojurewerkz.elastisch.rest.document :as doc]
             [clojurewerkz.elastisch.rest.bulk :as bulk]
