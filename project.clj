@@ -28,8 +28,13 @@
 
                  ;; ui
                  [day8.re-frame/http-fx "0.1.6" :exclusions [com.google.guava/guava org.apache.httpcomponents/httpclient]]
-                 [re-frame "0.9.2" :exclusions [com.google.guava/guava]]
-                 [reagent "0.8.1" :exclusions [com.google.guava/guava]]
+
+                 [reagent "0.10.0" :exclusions [com.google.guava/guava]]
+                 ;[re-frame "0.9.4" :exclusions [com.google.guava/guava]]
+                 ;[re-com "2.1.0" :exclusions [com.google.guava/guava]]
+                 [re-frame "0.12.0" :exclusions [com.google.guava/guava]]
+                 [re-com "2.8.0" :exclusions [com.google.guava/guava]]
+
                  [com.yetanalytics/re-mdl "0.1.8" :exclusions [com.google.guava/guava cljsjs/react-with-addons]]
                  [com.twitter/hbc-core "2.2.0" :exclusions [com.google.guava/guava org.apache.httpcomponents/httpclient]]
                  [org.clojure/clojurescript "1.10.339"]
@@ -41,6 +46,8 @@
                  [org.clojure/tools.logging "0.3.1"]
                  [org.clojure/tools.cli "0.3.5"]
                  [org.clojure/tools.namespace "0.2.11"]
+
+                 [org.clojure/core.match "1.0.0"]
 
                  [clojurewerkz/elastisch "2.2.2" :exclusions [io.netty/netty]]
                  [org.apache.mina/mina-core "2.0.15"]
@@ -58,7 +65,7 @@
                  ;[jumblerg/ring-cors "2.0.0"]
                  [ring-cors "0.1.13"]
                  ;[com.unbounce/encors "2.4.0"]
-
+                 [com.taoensso/sente "1.11.0"]
 
                  [aleph "0.4.6"]
                  [clj-http "3.9.1"]
@@ -71,6 +78,7 @@
                  [com.draines/postal "2.0.2"]
                  [hiccup "1.0.5"]
                  [hiccups "0.3.0"]
+                 [fipp "0.6.8"]
                  [proto-repl "0.3.1"]
                  [com.rpl/specter "1.1.2"]
 
@@ -107,7 +115,7 @@
   :profiles
   {:dev
    {:dependencies [[binaryage/devtools "0.8.2"]]
-    :plugins      [[lein-figwheel "0.5.9"]]}
+    :plugins      [[lein-figwheel "0.5.19"]]}
    :prod
    {:prep-tasks   [["cljsbuild" "once" "prod"] "compile"]}}
 
@@ -134,6 +142,26 @@
                     :pretty-print    false}}
 
 
+    {:id           "topic-dev"
+      :source-paths ["src/cljs"]
+      :figwheel     {:on-jsload "caudal.topic-subscriber.core/mount-root"}
+      :compiler     {:main                 caudal.topic-subscriber.core
+                     :output-to            "resources/public/js/compiled/topics.js"
+                     :output-dir           "resources/public/js/compiled/topics-out"
+                     :asset-path           "js/compiled/topics-out"
+                     :source-map-timestamp true
+                     :preloads             [devtools.preload]
+                     :external-config      {:devtools/config {:features-to-install :all}}
+                     }}
+
+    {:id           "topic-prod"
+     :source-paths ["src/cljs"]
+     :compiler     {:main            caudal.topic-subscriber.core
+                    :output-to       "resources/public/js/compiled/topics.js"
+                    :output-dir      "resources/public/js/compiled/topics-out-prod"
+                    :optimizations   :advanced
+                    :closure-defines {goog.DEBUG true}
+                    :pretty-print    false}}
     ]}
 
   :codox {:defaults {:doc/format :markdown}}

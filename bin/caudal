@@ -9,7 +9,7 @@
 # CAUDAL_CONFIG   Location of Config directory (*.clj and log4j2.xml)
 # MINIMUM_MEMORY  Minimum Memory of JVM
 # MAXIMUM_MEMORY  Maximum Memory of JVM
-# TIMEZONE        ID for a TimeZone, either an abbreviation such as 
+# TIMEZONE        ID for a TimeZone, either an abbreviation such as
 #                 "PST", a full name such as "America/Los_Angeles", or
 #                 a custom ID such as "GMT-8:00".
 
@@ -42,7 +42,7 @@ if test -z "$MAXIMUM_MEMORY"; then
   export MAXIMUM_MEMORY=1024m
 fi
 
-if test -z "$TIMEZONE"; then 
+if test -z "$TIMEZONE"; then
   export TIMEZONE=America/Mexico_City
 fi
 
@@ -61,7 +61,7 @@ start() {
       exit 2
     else
       echo "Caudal PID file is orphan PID : $pid, deleting ..."
-      rm $CAUDAL_HOME/$CAUDAL_NAME.pid 
+      rm $CAUDAL_HOME/$CAUDAL_NAME.pid
     fi
   fi
 
@@ -76,7 +76,7 @@ start() {
     exit 1
   fi
   echo "Using JVM installed on : $JAVA_BIN ..."
-  
+
   # Check version
   if [[ "$JAVA_BIN" ]]; then
     JAVA_VERSION=$("$JAVA_BIN" -version 2>&1 | awk -F '"' '/version/ {print $2}')
@@ -91,9 +91,11 @@ start() {
 
   # Start: normal or daemon mode
   if [ -z "$CAUDAL_DAEMON" ] ; then
-    $JAVA_BIN -Xms$MININUM_MEMORY -Xmx$MAXIMUM_MEMORY -Duser.timezone=$TIMEZONE $JVM_OPTS -cp "$CAUDAL_LIB" $CAUDAL_STARTER -c $CAUDAL_CONFIG
+    echo "$JAVA_BIN -Xms$MINIMUM_MEMORY -Xmx$MAXIMUM_MEMORY -Duser.timezone=$TIMEZONE $JVM_OPTS -cp $CAUDAL_LIB $CAUDAL_STARTER -c $CAUDAL_CONFIG"
+    $JAVA_BIN -Xms$MINIMUM_MEMORY -Xmx$MAXIMUM_MEMORY -Duser.timezone=$TIMEZONE $JVM_OPTS -cp "$CAUDAL_LIB" $CAUDAL_STARTER -c $CAUDAL_CONFIG
   else
-    $JAVA_BIN -Xms$MININUM_MEMORY -Xmx$MAXIMUM_MEMORY -Duser.timezone=$TIMEZONE $JVM_OPTS -cp "$CAUDAL_LIB" $CAUDAL_STARTER -c $CAUDAL_CONFIG 2>&1 &
+    echo "$JAVA_BIN -Xms$MINIMUM_MEMORY -Xmx$MAXIMUM_MEMORY -Duser.timezone=$TIMEZONE $JVM_OPTS -cp $CAUDAL_LIB $CAUDAL_STARTER -c $CAUDAL_CONFIG"
+    $JAVA_BIN -Xms$MINIMUM_MEMORY -Xmx$MAXIMUM_MEMORY -Duser.timezone=$TIMEZONE $JVM_OPTS -cp "$CAUDAL_LIB" $CAUDAL_STARTER -c $CAUDAL_CONFIG 2>&1 &
 
     retval=$?
     pid=$!
@@ -114,12 +116,12 @@ stop() {
   # Stop: daemon or normal mode
   if [ -f "$CAUDAL_HOME/$CAUDAL_NAME.pid" ] ; then
     pid=$( cat $CAUDAL_HOME/$CAUDAL_NAME.pid )
-    kill $pid > /dev/null 2>&1   
+    kill $pid > /dev/null 2>&1
     rm $CAUDAL_HOME/$CAUDAL_NAME.pid
     while ps -fea | grep $pid | grep $CAUDAL_NAME > /dev/null ; do
-      sleep 1      
+      sleep 1
     done
-    echo 
+    echo
     exit 0
   else
     echo "Unable to find $CAUDAL_HOME/$CAUDAL_NAME.pid"
@@ -135,9 +137,9 @@ restart() {
     kill $pid > /dev/null 2>&1
     rm $CAUDAL_HOME/$CAUDAL_NAME.pid
     while ps -fea | grep $pid | grep $CAUDAL_NAME > /dev/null ; do
-      sleep 1      
+      sleep 1
     done
-    echo 
+    echo
     start
   else
     echo "Unable to find $CAUDAL_HOME/$CAUDAL_NAME.pid"

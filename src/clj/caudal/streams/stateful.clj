@@ -192,7 +192,7 @@
                  (fn changed-mutator [{:keys [e-t-1 val-t-1]} e]
                    (let [val-t   (change-pred e)
                          ret-val {:e-t-1 e :val-t-1 val-t}]
-                     (if-let [changed? (and e-t-1 (not= val-t-1 val-t))]
+                     (if-let [changed? (and  (not= val-t-1 val-t))] ; e-t-1
                        (merge ret-val {:changed? true :old e-t-1})
                        ret-val))))]
     (fn changed-streamer [by-path state e]
