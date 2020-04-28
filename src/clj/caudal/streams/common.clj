@@ -11,7 +11,7 @@
             [clojure.string :as str]
             [clojure.tools.logging :as log]
             [clojure.walk :refer [walk postwalk]]
-            [clojure.core.async :as async :refer [chan go go-loop timeout <! >! <!! >!! alts! put!]]
+            [clojure.core.async :as async :refer [chan go go-loop timeout <! >! <!! >!! alts! put! dropping-buffer]]
             ;[immutant.caching :as C]
             [caudal.core.state :as ST]
             [caudal.util.caudal-util :refer [create-caudal-agent rotate-file]])
@@ -20,6 +20,12 @@
            (org.apache.log4j PropertyConfigurator)
            ;(org.infinispan.configuration.cache ConfigurationBuilder)
            ))
+
+;(print "compiling caudal.streams.common")
+
+; debe de estar al principio porque si no no compila !!!!
+(def ws-publish-chan (chan (dropping-buffer 100)))
+
 
 (defn line-stats* [msg print-rate]
   (let [atm (atom [nil 0])]

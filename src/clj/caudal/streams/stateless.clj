@@ -17,14 +17,19 @@
     ;[caudal.core.atom-state]
     ;[caudal.core.immutant-state]
             [caudal.streams.common :refer [key-factory
-                                                        touch-info
-                                                        propagate error
-                                                        create-sink]])
+                                           touch-info
+                                           propagate error
+                                           create-sink
+                                           ws-publish-chan]]
+             ;[caudal.io.rest-server :refer [ws-publish-chan]]
+            )
   (:import (java.net InetAddress Socket URL InetSocketAddress)
            (org.apache.log4j PropertyConfigurator)
            (org.apache.commons.io FileUtils)
            ;(org.infinispan.configuration.cache ConfigurationBuilder)
            ))
+
+;(def ws-publish-chan (chan))
 
 (defn printe
   "
@@ -153,6 +158,19 @@
     (if-let [new-event (apply transform-fn (concat args [event]))]
       (propagate by-path state new-event children)
       state)))
+
+(defn push2ws
+  "
+  Streamer function that sends events via websocket to clients, then propagates the event
+  > **Arguments**:
+    topic: String identifier of topic (clientes will subscribe to a set of topics
+    *children*: Children streamer functions to be propagated
+  "
+  [[topic] & children]
+  (fn [by-path state event]
+    (let [event (assoc event :caudal/topic topic)]
+      (>!! ws-publish-chan event)
+      (propagate by-path state event children))))
 
 (defn split
   "
