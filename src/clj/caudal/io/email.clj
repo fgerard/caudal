@@ -8,7 +8,7 @@
 
 (ns caudal.io.email
   (:require [clojure.core.async :as async :refer [go]]
-            [clojure.string :as str :refer [join]]
+            [clojure.string :as str :refer [join starts-with?]]
             [clojure.walk :as wlk :refer [walk]]
             [hiccup.core :as hiccup :refer [html]]
             [caudal.streams.common :as common :refer [propagate]]
@@ -37,10 +37,11 @@
    [:tbody (map-indexed (fn [i key]
                           (let [style (if (even? i)
                                         "background-color:#f5f8fa"
-                                        "background-color:#ffffff")]
+                                        "background-color:#ffffff")
+                                value (key source)]
                             [:tr {:style style}
                              [:th {:width "20%" :align "left"} (name key)]
-                             [:td {:width "80%" :align "left"} (key source)]]))
+                             [:td {:width "80%" :align "left"} (if (starts-with? value "data:image") [:img {:src value}] value)]]))
                         (keys source))]])
 
 (defn event->html
@@ -76,10 +77,9 @@
         select  (if (or (not keys) (nil? keys) (empty? keys))
                   events
                   (map (fn [x] (select-keys x keys)) events))
-        resume  (map (fn [event] (event->html event html-template)) select)     
+        resume  (map (fn [event] (event->html event html-template)) select)
         content (hiccup/html (make-header title) resume (make-footer))
         body    [{:type "text/html" :content content}]]
-   
     (postal/send-message smtp-opts
                          (merge msg-opts {:body body}))))
 
