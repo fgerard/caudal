@@ -62,7 +62,7 @@
                   event)))]
       (wlk/walk (partial catafixia caudal-event) identity html-template))))
 
-(defn email-event
+(defn email-event-with-keys
   "Sends an event or a sequence of events via email
 
    * *smtp-opts* SMTP options passed to Postal to send the email
@@ -71,15 +71,21 @@
    * *events* to be sended
    * keys (optional) keys to be sended
    * html-template (optional) to produce a representation of an event"
-  [smtp-opts msg-opts events & [keys html-template]]
-  (let [title   (:subject msg-opts)
-        events  (flatten [events])
-        select  (if (or (not keys) (nil? keys) (empty? keys))
-                  events
-                  (map (fn [x] (select-keys x keys)) events))
-        resume  (map (fn [event] (event->html event html-template)) select)
-        content (hiccup/html (make-header title) resume (make-footer))
-        body    [{:type "text/html" :content content}]]
+  ([smtp-opts msg-opts events & [keys html-template]]
+   (let [title   (:subject msg-opts)
+         events  (flatten [events])
+         select  (if (or (not keys) (nil? keys) (empty? keys))
+                   events
+                   (map (fn [x] (select-keys x keys)) events))
+         resume  (map (fn [event] (event->html event html-template)) select)
+         content (hiccup/html (make-header title) resume (make-footer))
+         body    [{:type "text/html" :content content}]]
+     (postal/send-message smtp-opts
+                          (merge msg-opts {:body body})))))
+
+(defn email-event-with-body-fn
+  [smtp-opts msg-opts event body-fn]
+  (let [body (body-fn event)]
     (postal/send-message smtp-opts
                          (merge msg-opts {:body body}))))
 
@@ -130,8 +136,10 @@
 
   ```
   "
-  [[smtp-opts msg-opts & [keys html-template]] & children]
+  [[smtp-opts msg-opts & [keys-or-body-fn html-template]] & children]
   (let [msg-opts (merge {:from "caudal"} msg-opts)]
-     (fn [by-path state event]
-       (email-event smtp-opts msg-opts event keys html-template)
-       (common/propagate by-path state event children))))
+    (fn [by-path state event]
+      (if (fn? keys-or-body-fn)
+        (email-event-with-body-fn smtp-opts msg-opts event keys-or-body-fn)
+        (email-event-with-keys smtp-opts msg-opts event keys-or-body-fn html-template))
+      (common/propagate by-path state event children))))
