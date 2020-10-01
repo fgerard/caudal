@@ -16,8 +16,8 @@
                  [codox "0.8.10"]
                  [lein-cljsbuild "1.1.4"]]
 
-  :dependencies [[org.clojure/clojure "1.9.0"]
-                 [org.clojure/core.async "0.3.443"]
+  :dependencies [[org.clojure/clojure "1.10.1"]
+                 [org.clojure/core.async "1.3.610"]
 
                  ;; logging
                  [org.apache.logging.log4j/log4j-core "2.11.0"]
@@ -28,6 +28,11 @@
 
                  ;; ui
                  [day8.re-frame/http-fx "0.1.6" :exclusions [com.google.guava/guava org.apache.httpcomponents/httpclient]]
+
+                 ;; Java 11
+                 [javax.xml.bind/jaxb-api "2.3.0"]
+                 [com.sun.xml.bind/jaxb-core "2.3.0"]
+                 [com.sun.xml.bind/jaxb-impl "2.3.0"]
 
                  [reagent "0.10.0" :exclusions [com.google.guava/guava]]
                  ;[re-frame "0.9.4" :exclusions [com.google.guava/guava]]
@@ -48,7 +53,6 @@
                  [org.clojure/tools.namespace "0.2.11"]
 
                  [org.clojure/core.match "1.0.0"]
-
                  [clojurewerkz/elastisch "2.2.2" :exclusions [io.netty/netty]]
                  [org.apache.mina/mina-core "2.0.15"]
 
@@ -59,7 +63,7 @@
                  ;[ring-middleware-format "0.7.2"]
                  ;[ring/ring-json "0.4.0"]
                  [ring/ring-core "1.6.2"]
-                 [ring-middleware-format "0.7.2"]
+                 [ring-middleware-format "0.7.4"]
                  [amalloy/ring-gzip-middleware "0.1.3"]
                  ;[jumblerg/ring.middleware.cors "1.0.1"]
                  ;[jumblerg/ring-cors "2.0.0"]
@@ -85,19 +89,6 @@
                  [shams/priority-queue "0.1.2"]]
 
   :main caudal.core.StarterDSL
-
-  :jvm-opts ~(concat
-               ; Normal JVM opts to pass in
-               ["-Xmx512m"]
-               ; Java 9+ recognition, adding --add-modules. Java versions before 9
-               ; had a different version syntax where they contained '.' delimiters,
-               ; from Java 9 onwards it has a simple versioning scheme based on one
-               ; number.
-               (let [[mayor minor version] (clojure.string/split (System/getProperty "java.version") #"\.")
-                     mayor (Integer/parseInt mayor)]
-                 (if (> mayor 1)
-                   ["--add-modules" "java.xml.bind"]
-                   [])))
 
   :repl-options {:prompt (fn [ns] (str "<" ns "> "))
                  :welcome (println "Welcome to the magical world of the repl!")
