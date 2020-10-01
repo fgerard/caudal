@@ -71,20 +71,15 @@
    * keys (optional) keys to be sended
    * html-template (optional) to produce a representation of an event"
   [smtp-opts msg-opts events & [keys html-template]]
-  (println :keys (pr-str keys) (or (not keys) (nil? keys) (empty? keys)))
   (let [title   (:subject msg-opts)
         events  (flatten [events])
         select  (if (or (not keys) (nil? keys) (empty? keys))
                   events
                   (map (fn [x] (select-keys x keys)) events))
-        _ (println :select (pr-str select))
-        resume  (map (fn [event] (event->html event html-template)) select)
-        _ (println :resume (pr-str resume))
+        resume  (map (fn [event] (event->html event html-template)) select)     
         content (hiccup/html (make-header title) resume (make-footer))
         body    [{:type "text/html" :content content}]]
-    (println :smtp-opts (pr-str smtp-opts))
-    (println :merge (pr-str (merge msg-opts {:body body})))
-
+   
     (postal/send-message smtp-opts
                          (merge msg-opts {:body body}))))
 
