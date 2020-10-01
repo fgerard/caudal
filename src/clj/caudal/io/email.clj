@@ -100,22 +100,38 @@
   (def email (mailer))
 
   ;; Mailer with Postal options
-  (def email (mailer {:host 'smtp.gmail.com'
-                      :user 'sample@gmail.com'
-                      :pass 'somesecret'}
-                     {:subject 'Help!!'
-                      :to ['ops@example.com' 'support@example.com']
-                      :ssl :yes}))
+  (def email (mailer [{:host 'smtp.gmail.com'
+                       :user 'sample@gmail.com'
+                       :pass 'somesecret'
+                       :port 465
+                       :ssl :yes}
+                      {:subject 'Help!!'
+                       :to ['ops@example.com' 'support@example.com']}]))
 
-  ;; Invoking email sending only :message and :ts fields
-  (email event [:message :ts])
+  ;; With custom keys
+  (def email (mailer [{:host 'smtp.gmail.com'
+                       :user 'sample@gmail.com'
+                       :pass 'somesecret'
+                       :port 465
+                       :ssl :yes}
+                      {:subject 'Help!!'
+                       :to ['ops@example.com' 'support@example.com']}
+                      [:key1 :key2]]))
 
-  ;; Invoking email sending only :message and :ts fields into a custom template
-  (email event [:message :ts] [:p [:em :message] ' since ' [:i :ts]])
+  ;; With custom html/hiccup template
+  (def email (mailer [{:host 'smtp.gmail.com'
+                       :user 'sample@gmail.com'
+                       :pass 'somesecret'
+                       :port 465
+                       :ssl :yes}
+                      {:subject 'Help!!'
+                       :to ['ops@example.com' 'support@example.com']}
+                      [:key1 :key2]
+                      [:div [:p :key1] [:p :key2]]]))
 
   ;; Sends max 5 email each 15 minutes using rollup
    (stateful/rollup :host 5 (* 60000 15)
-      (mailer smtp-opts))
+      email)
 
   ```
   "
