@@ -17,24 +17,18 @@
                                 :port 9900
                                 :idle-period 60}}])
 
-(def customs-event-level {:OnSceneNotKnown     0
+(defn calc-value [{eventName :eventName count :count :or {count 0}}]
+  (+ (min 10 count) (get {:OnSceneNotKnown     0
                           :OnCustomsEmpty      1
                           :OnBadParking        2
                           :OnProductNotVisible 3
                           :OnUntrustedRead     4
-                          :OnTrustedRead       5})
+                          :OnTrustedRead       15} eventName)))
 
-(defn aggregate [{a-eventName :eventName a-count :count :as a-evt} {eventName :eventName count :count :as e}]
-  (cond
-    (nil? a-evt) e
-
-    (> (get customs-event-level eventName) (get customs-event-level a-eventName)) e
-
-    (< (get customs-event-level eventName) (get customs-event-level a-eventName)) a-evt
-
-    (and (#{:OnUntrustedRead :OnTrustedRead} eventName) (> count a-count)) e
-
-    :OTHERWISE a-evt))
+(defn aggregate [aggegate-evt evt]
+  (if (or (not aggegate-evt) (> (calc-value evt) (calc-value aggegate-evt)))
+    evt
+    aggegate-evt))
 
 (defn aggregator [{:keys [a-uuid best-evt]} {:keys [eventName count uuid] :as e}]
   (let [best-evt-old best-evt

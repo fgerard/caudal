@@ -1,13 +1,13 @@
 (ns caudal.io.telegram
   (:require [clojure.core.async :refer [go-loop timeout <!]]
             [clojure.tools.logging :as log]
-            [clojure.string :as string] 
+            ;[clojure.string :as string] 
             [clojure.data.json :as json]
             ;[aleph.http :as http]
             ;[byte-streams :as bs]
             [clj-http.client :as http]
             [caudal.util.ns-util :refer [resolve&get-fn]]
-            [caudal.streams.common :as common :refer [propagate start-listener]]))
+            [caudal.streams.common :as common :refer [start-listener]]))
 
 (def base-url "https://api.telegram.org/bot")
 (http/with-connection-pool {:timeout 30 :threads 4 :insecure? false :default-per-route 4}
@@ -32,8 +32,9 @@
                         (json/read-str :key-fn keyword)
                         pr-str))))))
 
-  (defn send-file* [token chat-id options file method field filename]
+  (defn send-file* 
     "Helper function to send various kinds of files as multipart-encoded"
+    [token chat-id options file method field filename]
     (try
       (let [url          (str base-url token method)
             base-form    [{:part-name "chat_id" :content (str chat-id)}
@@ -84,7 +85,7 @@
                      :body
                      (json/read-str :key-fn keyword)
                      (assoc :url url :params params)))
-      (catch Throwable t
+      (catch Throwable _
         {:error (.getMessage e) :url url :params params})))
 
   (defn poller [url params]
@@ -115,5 +116,5 @@
   (defmethod start-listener 'caudal.io.telegram
     [sink config]
     (let [{:keys [token parser]} (get-in config [:parameters])
-          parser-fn (if parser (if (symbol? parser) (resolve&get-fn parser) parser))]
+          parser-fn (if parser (if (symbol? parser) (resolve&get-fn parser) parser) nil)]
       (start-server token parser-fn sink))))

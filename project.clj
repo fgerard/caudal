@@ -6,7 +6,7 @@
 ;   the terms of this license.
 ;   You must not remove this notice, or any other, from this software
 
-(defproject caudal "0.7.18"
+(defproject caudal "0.7.19"
   :description "Caudal Platform"
   :url "http://caudal.io/"
   :license {:name "Eclipse Public License"
@@ -53,10 +53,17 @@
                  [org.clojure/tools.namespace "0.2.11"]
 
                  [org.clojure/core.match "1.0.0"]
+                 
+                 [com.andrewmcveigh/cljs-time "0.5.2"]
+                 [org.clojure/java.jdbc "0.7.11"]
+                 [com.cemerick/pomegranate "0.0.13"]
+
                  [clojurewerkz/elastisch "2.2.2" :exclusions [io.netty/netty]]
                  [org.apache.mina/mina-core "2.0.15"]
 
                  [commons-io/commons-io "2.5"]
+                 
+                 [clj-fuzzy "0.4.1"]
 
                  [bidi "2.0.14"]
                  [org.apache.kafka/kafka-clients "0.10.1.0"]

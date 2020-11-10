@@ -444,6 +444,10 @@
       (pp/pprint streams-with-path))
     streams-with-path))
 
+; estos declare es para que calva no se queje
+(declare caudal.streams.stateless)
+(declare caudal.streams.stateful)
+
 (defmacro using-path-with-default-streams [form]
   (using-path caudal.streams.stateless caudal.streams.stateful form))
 
