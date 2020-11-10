@@ -119,7 +119,7 @@
 (defn start-client2server-chan-listener [ch-recv connected-uids]
   (go-loop []
            (let [ws-event (<! ch-recv)]
-             (log/info (pr-str [:----> ws-event]))
+             ;(log/info (pr-str [:----> ws-event]))
              (ws-event-handler ws-event)
              ;(log/debug "got update from robot: " (subs 0 (min 1000 (count data2-print)) data2-print))
              (let [uids (into #{} (:any @connected-uids))]
@@ -135,7 +135,7 @@
                  (future
                   (doseq [uid uids]
                     (when ((@subscriptions uid) topic)
-                      (log/info "sending info:" uid " " (pr-str event))
+                      ;(log/info "sending info:" uid " " (pr-str event))
                       (send-fn uid [:caudal/update event])))))
                (recur)))))
 
