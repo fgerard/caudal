@@ -1,9 +1,9 @@
-FROM openjdk:10-jre-slim
+FROM azul/zulu-openjdk:8u312-8.58.0.13
 
 MAINTAINER Daniel Estevez <destevez@quantumlabs.ai>
 
 ENV PACKAGE_NAME=caudal \
-    PACKAGE_VERSION=REPLACE_VERSION
+    PACKAGE_VERSION=0.7.19
 
 ENV CAUDAL_HOME=/home/${PACKAGE_NAME} \
     CAUDAL_EXT=/home/${PACKAGE_NAME}/ext \
