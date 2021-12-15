@@ -17,7 +17,9 @@
                  [lein-cljsbuild "1.1.4"]]
 
   :dependencies [[org.clojure/clojure "1.10.3"]
-                 [org.clojure/core.async "1.3.610"]
+                 [org.clojure/core.async "1.5.648"]
+                 ;[org.clojure/clojurescript "1.10.339"] ;896"]
+                 [org.clojure/clojurescript "1.10.520" :exclusions [com.fasterxml.jackson.core/jackson-core]]
 
                  ;; logging
                  [org.apache.logging.log4j/log4j-core "2.16.0"]
@@ -42,7 +44,6 @@
 
                  [com.yetanalytics/re-mdl "0.1.8" :exclusions [com.google.guava/guava cljsjs/react-with-addons]]
                  [com.twitter/hbc-core "2.2.0" :exclusions [com.google.guava/guava org.apache.httpcomponents/httpclient]]
-                 [org.clojure/clojurescript "1.10.339"]
 
                  [com.cerner/clara-rules "0.16.0"]
 
