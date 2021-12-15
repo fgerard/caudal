@@ -29,7 +29,7 @@
            ;(org.infinispan.configuration.cache ConfigurationBuilder)
            ))
 
-;(def ws-publish-chan (chan))
+;(def ws-publish-chan (chan)) ; ojo se define en common.clj porque si no no compila ???
 
 (defn printe
   "
