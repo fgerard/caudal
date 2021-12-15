@@ -6,7 +6,7 @@
 ;   the terms of this license.
 ;   You must not remove this notice, or any other, from this software
 
-(defproject caudal "0.7.19"
+(defproject caudal "0.7.20"
   :description "Caudal Platform"
   :url "http://caudal.io/"
   :license {:name "Eclipse Public License"
@@ -16,12 +16,12 @@
                  [codox "0.8.10"]
                  [lein-cljsbuild "1.1.4"]]
 
-  :dependencies [[org.clojure/clojure "1.10.1"]
+  :dependencies [[org.clojure/clojure "1.10.3"]
                  [org.clojure/core.async "1.3.610"]
 
                  ;; logging
-                 [org.apache.logging.log4j/log4j-core "2.11.0"]
-                 [org.apache.logging.log4j/log4j-slf4j-impl "2.11.0"]
+                 [org.apache.logging.log4j/log4j-core "2.16.0"]
+                 [org.apache.logging.log4j/log4j-slf4j-impl "2.16.0"]
 
                  ;; catch key-shortcuts
                  [keybind "2.1.0"]
@@ -70,6 +70,8 @@
                  ;[ring-middleware-format "0.7.2"]
                  ;[ring/ring-json "0.4.0"]
                  [ring/ring-core "1.6.2"]
+                 [org.flatland/ordered "1.5.9"] ; se pone esta versión para que no importe una anterior que no jala en cloj3ure 1.10
+                                                ; el que usa esta dependencia es el ring-midleware-format
                  [ring-middleware-format "0.7.4"]
                  [amalloy/ring-gzip-middleware "0.1.3"]
                  ;[jumblerg/ring.middleware.cors "1.0.1"]
