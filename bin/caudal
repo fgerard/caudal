@@ -83,7 +83,8 @@ start() {
     echo "JAVA Version : $JAVA_VERSION"
     MAYOR_DIGIT=$( echo $JAVA_VERSION | sed -n 's/\([0-9]*\)\..*/\1/p' )
     if [ $MAYOR_DIGIT -gt "1" ]; then
-      JVM_OPTS="-server -XX:+CMSParallelRemarkEnabled -XX:+AggressiveOpts -XX:+CMSClassUnloadingEnabled -XX:+IgnoreUnrecognizedVMOptions --add-modules=java.xml.bind"
+      JVM_OPTS="-server -XX:+CMSParallelRemarkEnabled -XX:+AggressiveOpts -XX:+CMSClassUnloadingEnabled -XX:+IgnoreUnrecognizedVMOptions"
+      # --add-modules=java.xml.bind"
     else
       JVM_OPTS="-server -XX:+UseConcMarkSweepGC -XX:+UseParNewGC -XX:+CMSParallelRemarkEnabled -XX:+AggressiveOpts -XX:+UseFastAccessorMethods -XX:+UseCompressedOops -XX:+CMSClassUnloadingEnabled"
     fi
