@@ -79,7 +79,7 @@
                  ;[jumblerg/ring-cors "2.0.0"]
                  [ring-cors "0.1.13"]
                  ;[com.unbounce/encors "2.4.0"]
-                 [com.taoensso/sente "1.11.0"]
+                 [com.taoensso/sente "1.16.2"] ;1.11.0
 
                  [aleph "0.4.6"]
                  [clj-http "3.9.1"]
