@@ -10,7 +10,7 @@
             [caudal.streams.common :as common :refer [start-listener]]))
 
 (def base-url "https://api.telegram.org/bot")
-(http/with-connection-pool {:timeout 30 :threads 4 :insecure? false :default-per-route 4}
+#_(http/with-connection-pool {:timeout 30 :threads 4 :insecure? false :default-per-route 4})
 
   (defn send-text*
     "Sends message to the chat"
@@ -32,7 +32,7 @@
                         (json/read-str :key-fn keyword)
                         pr-str))))))
 
-  (defn send-file* 
+  (defn send-file*
     "Helper function to send various kinds of files as multipart-encoded"
     [token chat-id options file method field filename]
     (try
@@ -90,17 +90,18 @@
 
   (defn poller [url params]
     (try
-      (log/debug {:pooling url :params params})
-      (-> (http/get url {:query-params params})
-          :body
-          (json/read-str :key-fn keyword))
+      (let [params {:query-params params :socket-timeout 3000 :connection-timeout 3000}]
+        (log/debug {:pooling url :params params})
+        (-> (http/get url params)
+            :body
+            (json/read-str :key-fn keyword)))
       (catch Exception e
         (poller-error e url params))))
 
   (defn start-server [token message-parser sink]
     (log/info "Starting Telegram Bot Server, token: " token)
     (let [url (str base-url token "/getUpdates")]
-      (go-loop [offset 0 limit 100] 
+      (go-loop [offset 0 limit 100]
         (let [params {:timeout 1 :offset offset :limit limit}
               {:keys [ok result] :as data} (poller url params)]
           (if ok
@@ -117,4 +118,4 @@
     [sink config]
     (let [{:keys [token parser]} (get-in config [:parameters])
           parser-fn (if parser (if (symbol? parser) (resolve&get-fn parser) parser) nil)]
-      (start-server token parser-fn sink))))
+      (start-server token parser-fn sink)))

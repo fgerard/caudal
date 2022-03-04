@@ -82,7 +82,7 @@
                  [com.taoensso/sente "1.16.2"] ;1.11.0
 
                  [aleph "0.4.6"]
-                 [clj-http "3.9.1"]
+                 [clj-http "3.12.3"]
                  [gloss "0.2.5"]
                  [org.immutant/scheduling "2.1.10" :exclusions [ch.qos.logback/logback-classic]]
                  [org.immutant/caching "2.1.10"] ; cambio de version necesario para evitar TLS error
