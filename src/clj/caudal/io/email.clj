@@ -143,3 +143,52 @@
         (email-event-with-body-fn smtp-opts msg-opts event keys-or-body-fn)
         (email-event-with-keys smtp-opts msg-opts event keys-or-body-fn html-template))
       (common/propagate by-path state event children))))
+
+(comment
+
+  (require '[caudal.io.email :as email] '[hiccup.core :as hiccup :refer [html]] '[clojure.java.io :as io])
+
+  (def D [{:host "smtp.gmail.com",
+           :user "notificacion.quantumlabs@gmail.com",
+           :pass "tsnnkudkzwcfhrqz",
+           :port 465,
+           :ssl :yes}
+          {:subject "test !!",
+           :from "caudal"
+           :to ["fgerard@quantumlabs.ai" "destevez@quantumlabs.ai"]}])
+
+  (def I (slurp "image.b64"))
+
+  (def event {:image (subs I 0 (dec (count I)))
+              :eventName "ENTRADA"
+              :ts 0})
+
+  (defn e->html [{:keys [image eventName ts]}]
+    (let [sdf (java.text.SimpleDateFormat. "yyyy-MM-dd HH:mm:ss.SSS")
+          decoder (java.util.Base64/getDecoder)
+          bytes (.decode decoder image)
+          tmpFile (io/file "imagen-para-enviar.jpg")
+          hiccup [:div
+                  [:p (str "Evento:" eventName)]
+                  [:p (str "Cuando: " (.format sdf ts))]]]
+      (with-open [img-file (java.io.FileOutputStream. tmpFile)]
+        (.write img-file bytes))
+      
+      (println (.getCanonicalPath tmpFile))
+      [{:type "text/html" :content (html hiccup)}
+       {;:type "image/jpg" ;"text/plain" 
+        :type :inline
+        :content tmpFile
+        }]))
+
+  (let [[smtp-opts msg-opts & [keys-or-body-fn html-template]] D]
+    (email/email-event-with-body-fn smtp-opts msg-opts event e->html))
+
+
+(let [png-bytes (.decode (java.util.Base64/getDecoder) screenshot)
+      imagen (java.io.File/createTempFile "cdl" ".png")]
+  (with-open [xout (java.io.FileOutputStream. imagen)]
+    (.write xout png-bytes)) images)
+
+  
+  )
