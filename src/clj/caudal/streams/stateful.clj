@@ -82,6 +82,43 @@
            children))
         state))))
 
+(defn ewma-timeless-var
+  "
+  Streamer function that normalizes the metric value, it calculates the ewma
+  which represents the exponential waited moving average and is calculated by the next equation:
+  (last-metric * r) + (metric-history * (1-r)), events with no metric will be ignored 
+  > **Arguments**:
+  *state-key*: state key to store the metric
+  *r*: Ratio value or keyword to contin r in event
+  *(metric-key)*: Optional for key holding metric, default :metric
+  *children* the streamer functions to propagate
+  "
+  [[state-key r-val-or-kwd metric-key] & children]
+  (let [metric-key (or metric-key :metric)
+        mutator (->toucher
+                 (fn ewma-timeless-mutator [{:keys [ewma]} e]
+                   (let [r (cond (keyword? r-val-or-kwd)
+                                 (get e r-val-or-kwd 0.1)
+
+                                 (number? r-val-or-kwd)
+                                 r-val-or-kwd
+
+                                 :else 0.1)
+                         e-metric (metric-key e)]
+                     (if ewma
+                       {:ewma (+ (* r e-metric) (* (- 1 r) ewma)) :r r :metric-key metric-key}
+                       {:ewma e-metric :r r :metric-key metric-key}))))]
+    (fn ewma-timeless-streamer [by-path state e]
+      (if (metric-key e)
+        (let [d-k (key-factory by-path state-key)
+              {{:keys [ewma]} d-k :as new-state} (update state d-k mutator e)]
+          (propagate
+           by-path
+           new-state
+           (assoc e metric-key ewma)
+           children))
+        state))))
+
 (defn reduce-with
   "
   Streamer function that reduces values of an event using a function and propagates it
