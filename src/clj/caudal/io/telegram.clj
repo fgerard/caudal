@@ -20,17 +20,15 @@
        (let [url  (str base-url token "/sendMessage")
              base-form    [{:name "chat_id" :content (str chat-id)}
                            {:name "text" :content text}]
-             options-form (for [[key value] options]
-                            {:name (name key) :content (if (coll? value) (json/write-str value) value)})
-             form         (into base-form options-form)
-             resp         (http/post url {:multipart form})]
+             options (merge {:socket-timeout 500 :connection-timeout 500} options)
+             ;options-form (for [[key value] options]
+             ;               {:name (name key) :content (if (coll? value) (json/write-str value) value)})
+             ;form         (into base-form options-form)
+             resp         (http/post url (merge {:multipart base-form} options))]
          (-> resp :body))
-       (catch clojure.lang.ExceptionInfo e
-         (log/error (-> e
-                        .getData
-                        :body
-                        (json/read-str :key-fn keyword)
-                        pr-str))))))
+       (catch Exception e
+         (log/error (pr-str [(class e) (.getMessage e)]))
+         e))))
 
   (defn send-file*
     "Helper function to send various kinds of files as multipart-encoded"
@@ -39,17 +37,15 @@
       (let [url          (str base-url token method)
             base-form    [{:part-name "chat_id" :content (str chat-id)}
                           {:part-name field :content file :name filename}]
-            options-form (for [[key value] options]
-                           {:part-name (name key) :content value})
-            form         (into base-form options-form)
-            resp         (http/post url {:multipart form})]
+            options (merge {:socket-timeout 500 :connection-timeout 500} options)
+            ;options-form (for [[key value] options]
+            ;               {:part-name (name key) :content value})
+            ;form         (into base-form options-form)
+            resp         (http/post url (merge {:multipart base-form} options))]
         (-> resp :body))
-      (catch clojure.lang.ExceptionInfo e
-        (log/error (-> e
-                       .getData
-                       :body
-                       (json/read-str :key-fn keyword)
-                       pr-str)))))
+      (catch Exception e
+        (log/error (pr-str [(class e) (.getMessage e)]))
+        e)))
 
   (defn send-text
     [[key-token key-chat-id text options] & children]

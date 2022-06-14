@@ -129,6 +129,7 @@
         (child by-path computed-state e)
         (catch Throwable t
           (.printStackTrace t)
+          (log/warn (Exception. "para stacktrace"))
           (log/error t)
           (log/error "Error propagating event!" (pr-str e) (-> t .getClass .getName) (.getMessage t))
           computed-state)))
