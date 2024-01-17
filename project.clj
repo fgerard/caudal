@@ -7,7 +7,7 @@
   ;   You must not remove this notice, or any other, from this software
 
   (defproject caudal "0.8.0"
-    :description "Caudal Platform"
+    :description "Caudal Platformi 0.8.0"
     :url "http://caudal.io/"
     :license {:name "Eclipse Public License"
               :url "http://www.eclipse.org/legal/epl-v10.html"}
