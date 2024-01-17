@@ -17,7 +17,8 @@
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.session :refer [wrap-session]]
             [ring.middleware.cors :refer [wrap-cors]]
-            [ring.middleware.format :refer [wrap-restful-format]]
+            ;se quita en Ver8 causa problemas;
+            ;[ring.middleware.format :refer [wrap-restful-format]]
             [ring.middleware.gzip :refer [wrap-gzip]]
             [aleph.http :as aleph-http]
 
@@ -186,7 +187,8 @@
         public-dir (-> (or (System/getenv "CAUDAL_HOME") ".")
                        (str "/resources/public/"))]
     (cond-> (create-handler publisher? sink states)
-            true (wrap-restful-format :formats [:json-kw :edn])
+            ; se quita Ver8 causa problemas 
+            ;true (wrap-restful-format :formats [:json-kw :edn])
             ;(wrap-json-response)
             true (wrap-keyword-params)
             true (wrap-params)

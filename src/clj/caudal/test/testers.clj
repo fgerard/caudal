@@ -9,6 +9,7 @@
 (ns caudal.test.testers
   (:require [clojure.pprint :as pp]
             [clojure.string :as str]
+            [clojure.java.io :as io]
             [clojure.tools.logging :as log]
             [clojure.core.async :as async :refer [chan go go-loop buffer timeout <! >! <!! >!!]]
             [immutant.caching :as C]
@@ -306,7 +307,7 @@
       (reduce (fn [[n stdev-t] stdevi]
                 [(+ n partes) (Math/sqrt (/ (+ (* stdev-t stdev-t n) (* stdevi stdevi partes)) (+ n partes)))])
               [0 0]
-              stdevs))))
+              stdevs)))
 
 
 ;(require '[clojure.core.async :refer [chan >!! alts! go-loop buffer <!]])
@@ -321,3 +322,18 @@
 (def c (chan (buffer 1) (filter dedup)))
 
 ;( go-loop [] (log/debug "llego:" (<! c)) (recur))
+
+(do 
+  (def d-name ["livelong" "thankyou" "thumbsup" "thumbsdown"])
+  (doseq [d d-name]
+    (let [l (into [] (.list (io/file d)))
+          l-train (subvec l 2)
+          l-val (subvec l 0 2)]
+      (doseq [t l-train]
+        (println (format "%s/%s -> %s" d t "train"))
+        (.renameTo (io/file (io/file d) t) (io/file (io/file "train") t)))
+      (doseq [v l-val]
+        (println (format "%s/%s -> %s" d v "test"))
+        (.renameTo (io/file (io/file d) v) (io/file (io/file "test") v))))))
+
+)

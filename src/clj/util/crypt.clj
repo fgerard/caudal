@@ -6,7 +6,7 @@
            (javax.crypto Cipher)
            (javax.crypto.spec IvParameterSpec SecretKeySpec)
            (java.util Arrays Scanner)
-           (javax.xml.bind DatatypeConverter)
+           ;(javax.xml.bind DatatypeConverter)
            (org.apache.commons.codec.digest DigestUtils)))
 
 (def CRYPT-ALGORITHM "AES")
@@ -24,7 +24,7 @@
 (def INIT-VECTOR (byte-array (repeat 16 (byte 0x0))))
 
 (def CRYPTED-EXTs #{"crypted" "crypt" "cclj"})
-
+  
 (defn use-or-input [prompt pass]
   (if pass
     pass
@@ -68,3 +68,4 @@
       (catch Throwable t
         (.printStackTrace t)
         (throw t)))))
+
