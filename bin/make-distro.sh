@@ -10,6 +10,8 @@ export SERVICE_NAME=$( echo $PROJECT | awk '{print($2)}' ) && \
 export SERVICE_VERSION=$( echo $PROJECT | awk '{print(substr($3,2,length($3)-2))}' ) && \
 export DISTRO_DIR=$SERVICE_NAME-$SERVICE_VERSION && \
 cd $ROOT_PATH && \
+echo "IN PATH:" && \
+pwd && \
 lein clean && \
 lein with-profile prod uberjar && \
 rm -rvf $DISTRO_DIR* && \
