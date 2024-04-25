@@ -42,7 +42,7 @@
 
 (defn build-query-key [{:keys [key by1 by2 by3 by4 by5] :as params}]
   (log/debug "params:" (pr-str params))
-  (let [query-key (if key
+  (let [query-key (when key
                     (vec
                      (concat [(keyword key)] (vec (filter identity [by1 by2 by3 by4 by5])))))]
     (log/debug "query-key: " query-key)
