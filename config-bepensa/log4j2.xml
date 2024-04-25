@@ -1,21 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Configuration monitorInterval="30">
-  <Properties/>
-  <Appenders>
-    <Console name="STDOUT" target="SYSTEM_OUT">
-      <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight{%-5p}{FATAL=magenta, ERROR=red, WARN=yellow, INFO=green, DEBUG=cyan, TRACE=blue} [%t] %c{2} - %m%n"/>
-    </Console>
-    <RollingFile name="ROLLING-FILE"        fileName="./logs/caudal.log"        filePattern="./logs/caudal.log-%d{yyyy-MM-dd}"        append="true">
-      <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5p [${hostName}] [%t] %c{2} - %m%n"/>
-      <Policies>
-        <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
-      </Policies>
-      <DefaultRolloverStrategy max="7"/>
-    </RollingFile>
-  </Appenders>
-  <Loggers>
-    <Root level="INFO">
-      <AppenderRef ref="STDOUT"/>
-    </Root>
-  </Loggers>
+<Configuration status="INFO">
+    <Appenders>
+        <!-- STDOUT Appender -->
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
+        </Console>
+        
+        <!-- ROLLING-FILE Appender -->
+        <File name="File" fileName="caudallito.log">
+            <PatternLayout>
+                <Pattern>%d %p %c{1.} [%t] %m%n</Pattern>
+            </PatternLayout>
+        </File>
+        <!-- RollingFile name="RollingFile" fileName="caudal-rfid.log"
+                      filePattern="caudal-rfid-%d{MM-dd-yyyy}-%i.log">
+            <PatternLayout>
+                <Pattern>%d %p %c{1.} [%t] %m%n</Pattern>
+            </PatternLayout>
+            <Policies>
+                <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
+                <SizeBasedTriggeringPolicy size="10 MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="10"/>
+        </RollingFile -->
+    </Appenders>
+
+    <Loggers>
+        <Root level="info">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="File"/>
+        </Root>
+    </Loggers>
 </Configuration>

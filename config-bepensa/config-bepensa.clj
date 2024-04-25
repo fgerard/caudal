@@ -70,10 +70,10 @@
    (time-stampit
     [:entry-ts]
     ;(reduce-with [:counter e-counter])
-    (smap [#(log/info (pr-str [:antes-tag-reducer  %]))])
+    ;(smap [#(log/info (pr-str [:antes-tag-reducer  %]))])
     (reduce-with
      [:tag-reducer tag-reducer]
-     (smap [#(log/info (pr-str [:tag-reducer %]))])
+     ;(smap [#(log/info (pr-str [:tag-reducer %]))])
      (where 
       [:send-tag]
       (smap 
