@@ -59,13 +59,25 @@
 
 (defn configAntennas [antennas-obj antennas-ids]
   (log/info (format "antenas-obj: %s -> %s" antennas-obj antennas-ids))
-  (doseq [id antennas-ids]
-    (log/info (format "id: %s" id))
+  (doseq [[id tx rx :as info] antennas-ids]
+    (log/info (format "id: %s" info))
     (let [d-antenna (.getAntenna antennas-obj (short id))]
       (log/info (format "Antenna: %s -> %s" d-antenna id))
       (log/info (pr-str (bean->map d-antenna)))
+      (cond (= rx true)
+            (.setIsMaxRxSensitivity d-antenna true)
+
+            (number? rx)
+            (.setRxSensitivityinDbm d-antenna rx))
+      
+      (cond (= tx true)
+            (.setIsMaxTxPower d-antenna true)
+            
+            (number? tx)
+            (.setTxPowerinDbm d-antenna tx))
       ;(.setIsMaxRxSensitivity d-antenna true)
-      (.setIsMaxTxPower d-antenna true)
+      ;(.setIsMaxTxPower d-antenna true)
+
       (log/info (format "MaxRxSencitivityinDbm: %s" (.getRxSensitivityinDbm d-antenna)))
       (log/info (format "MaxTxPoweridDbm: %s" (.getTxPowerinDbm d-antenna)))
       ;(.setRxSensitivityinDbm d-antenna -0.5)
@@ -191,10 +203,10 @@
     (let [reader (doto (ImpinjReader.)
                    (.connect controler))
           features (.queryFeatureSet reader)
-          
+
           N (.getGpoCount features)
 
-          _ (log/info (format "Existen %d Gpos " N)) 
+          _ (log/info (format "Existen %d Gpos " N))
 
           settings (doto (.queryDefaultSettings reader)
                      (.setRfMode (int RfMode))
@@ -223,10 +235,10 @@
                    (.setIncludeSeenCount true)
                    (.setMode com.impinj.octane.ReportMode/Individual))
           ;igual que report es por referencia GRACIAS OOP! jajaja
-          antennas (doto (.getAntennas settings)
-                     (.disableAll)
-                     (.enableById (mapv #(short %) antennas))
-                     (configAntennas antennas))
+          d-antennas (doto (.getAntennas settings)
+                       (.disableAll)
+                       (.enableById (mapv #(short (first %)) antennas))
+                       (configAntennas antennas))
           listener (create-listener chan-buf-size sink controler-name controler cleanup-delta d-id-re)]
       (.applySettings reader settings)
       (.setTagReportListener reader listener)
@@ -241,8 +253,8 @@
          :or {controler-name "name-undefined"
               chan-buf-size 10
               RfMode 1002 
-              antennas [1]
-              cleanup-delta 1000
+              antennas [[1 true nil]]
+              cleanup-delta 10000
               d-id-re ".*"}} (get-in config [:parameters])
         d-id-re (re-pattern d-id-re)]
     (log/info "Filtrando d-id con: " d-id-re)

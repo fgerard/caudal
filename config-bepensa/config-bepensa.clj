@@ -89,17 +89,18 @@
                                         :chan-buf-size 10
                                         :fastId false
                                         :d-id-re "E2004.*"
-                                        :antennas [1 2]}}])
+                                        :antennas [[1 true nil] [2 true nil]]}}])
+; en antennas va por cada antena un vector con (id, tx power,rx sendibility) [id nil|true|real nil|true|int-dbm]
 
 (deflistener rfid-entrada [{:type 'caudal.io.rfid-server
                             :parameters {:controler-name "entrada"
                                          :controler "10.180.10.131"
                                          :RfMode 1002
-                                         :cleanup-delta 1000
+                                         :cleanup-delta 10000
                                          :chan-buf-size 10
                                          :fastId false
                                          :d-id-re "E2004.*"
-                                         :antennas [1 2]}}])
+                                         :antennas [[1 true nil] [2 true nil]]}}])
 
 
  ;; Wires our listener with the streamers
