@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Configuration status="INFO">
+<Configuration status="warn">
     <Appenders>
         <!-- STDOUT Appender -->
         <Console name="Console" target="SYSTEM_OUT">
@@ -7,13 +7,8 @@
         </Console>
         
         <!-- ROLLING-FILE Appender -->
-        <File name="File" fileName="caudallito.log">
-            <PatternLayout>
-                <Pattern>%d %p %c{1.} [%t] %m%n</Pattern>
-            </PatternLayout>
-        </File>
-        <!-- RollingFile name="RollingFile" fileName="caudal-rfid.log"
-                      filePattern="caudal-rfid-%d{MM-dd-yyyy}-%i.log">
+        <RollingFile name="RollingFile" fileName="logs/caudal-rfid.log"
+                      filePattern="logs/caudal-rfid-%d{MM-dd-yyyy}-%i.log">
             <PatternLayout>
                 <Pattern>%d %p %c{1.} [%t] %m%n</Pattern>
             </PatternLayout>
@@ -22,13 +17,27 @@
                 <SizeBasedTriggeringPolicy size="10 MB"/>
             </Policies>
             <DefaultRolloverStrategy max="10"/>
-        </RollingFile -->
+        </RollingFile>
+        <RollingFile name="RollingEventsFile" fileName="logs/events-rfid.log"
+                      filePattern="logs/events-rfid-%d{MM-dd-yyyy}-%i.log">
+            <PatternLayout>
+                <Pattern>%d %p %c{1.} [%t] %m%n</Pattern>
+            </PatternLayout>
+            <Policies>
+                <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
+                <SizeBasedTriggeringPolicy size="10 MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="10"/>
+        </RollingFile>
     </Appenders>
 
     <Loggers>
-        <Root level="info">
+        <Logger name ="ai.quantumlabs.rfid-events" level="trace" additivity="false">
+   	    <AppenderRef ref="RollingEventsFile"/>
+        </Logger>
+        <Root level="info" additivity="false">
             <AppenderRef ref="Console"/>
-            <AppenderRef ref="File"/>
-        </Root>
+            <AppenderRef ref="RollingFile"/>
+         </Root>
     </Loggers>
 </Configuration>

@@ -89,7 +89,7 @@
                                         :chan-buf-size 10
                                         :fastId false
                                         :d-id-re "E2004.*"
-                                        :antennas [[1 true nil] [2 true nil]]}}])
+                                        :antennas [[1 30 nil] [2 27 nil]]}}])
 ; en antennas va por cada antena un vector con (id, tx power,rx sendibility) [id nil|true|real nil|true|int-dbm]
 
 (deflistener rfid-entrada [{:type 'caudal.io.rfid-server

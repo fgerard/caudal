@@ -99,7 +99,8 @@
                     (format file-name (.format (java.text.SimpleDateFormat. "yyyy-MM-dd") (System/currentTimeMillis)))
                     file-name)]
     (with-open [out (io/writer file-name :append true)]
-      (.write out (str event "\n"))))
+      (.write out (str event "\n"))
+      (log/trace event)))
   event)
 
 (defn post-it [platform-url {:keys [controler-name AntennaPortNumber PeakRssiInDbm d-id event rfid-ts uuid] :as evt} r-cnt err-chan]
@@ -108,11 +109,12 @@
     ;(log/info (pr-str evt))
     (let [system-event {:atTime rfid-ts :eventName event :value d-id :uuid uuid :lane (str controler-name AntennaPortNumber)}
           status (post-it! platform-url system-event)
-          line (format "\t send-events http-status: %s %-10s %s %-25s %-20s %s %s %s"  
+          line (format "\t EVENT http-status: %s %-10s %s %-25s %-20s %s %s %s"  
                        status controler-name AntennaPortNumber d-id event uuid rfid-ts PeakRssiInDbm)]
+      ;(log/info line)
+      ;(write-line "eventos.txt" line)
       (log/info line)
-      (write-line "eventos.txt" line)
-      (log/info (format "send-events: %s %s %s " status PLATFORM-URL system-event)))
+      (log/info (format "%s %s %s " status PLATFORM-URL system-event)))
       ;(store-event (str CAUDAL_DATA "/relevantes/relevantes-%s.edn.txt") (assoc event :http-status status :retry r-cnt)))
   (catch Throwable e
     (.printStackTrace e)
