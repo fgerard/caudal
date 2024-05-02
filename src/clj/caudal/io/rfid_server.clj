@@ -6,6 +6,8 @@
             [clojure.edn :as edn])
   (:import (com.impinj.octane ImpinjReader
                               TagReportListener
+                              KeepaliveListener
+                              ConnectionLostListener
                               GpoMode)))
 
 (defmulti get-value-of (fn [bean fld method]
@@ -136,14 +138,15 @@
 
 (defn send-if-not-in-cache [d-id-re sink {:keys [d-id] :as evt}]
   (log/debug :re-matches d-id-re d-id (re-matches d-id-re d-id))
-  (when (re-matches d-id-re d-id)
+  (if (re-matches d-id-re d-id)
     (let [;state @timed-state
         ;_ (log/warn (pr-str [:timed-state d-id :-> state]))
         ;_ (log/warn (str "---> " (pr-str (get-in @timed-state [:ids d-id])) " exists? "))
           exists? (get-in @timed-state [:ids d-id])]
       (timed-cache-put d-id evt)
       (when-not exists?
-        (sink evt)))))
+        (sink evt)))
+    (log/info (format "Dropping tag: %s" (pr-str evt)))))
 
 (defn start-tag2sink-remove-duplicates [d-id-re sink sink-chan]
   (go-loop [{:keys [event] :as e} (<! sink-chan)]
@@ -156,23 +159,26 @@
 
 (defn start-timed-cache-cleanup [delta-loop sink-chan]
   (go-loop [removed-now (timed-cache-get&clear-removed delta-loop)]
-    (when (seq removed-now)
+    #_(when (seq removed-now)
       (log/info (pr-str [:removig-tags (mapv :d-id removed-now)])))
     (doseq [{:keys [d-id] :as evt} removed-now]
-      (>! sink-chan (merge evt {:event :ON_TAG_REMOVED
-                                :rfid-ts (System/currentTimeMillis)})))
+      (let [removed-event (merge evt {:event :ON_TAG_REMOVED
+                                      :rfid-ts (System/currentTimeMillis)})]
+        (log/info (pr-str [:removing-tag evt]))
+        (>! sink-chan removed-event)))
     (<! (timeout delta-loop))
     (recur (timed-cache-get&clear-removed delta-loop))))
 
-(defn t->evt [controler-name controler tagORevt]
+(defn t->evt [evt-key controler-name controler tagORevt]
   (try
-    (let [evt (if (map? tagORevt)
+    (let [extra {:event evt-key
+                 :controler-name controler-name
+                 :controler controler
+                 :rfid-ts (System/currentTimeMillis)}
+          evt (if (map? tagORevt)
                 tagORevt
-                (assoc (convert-tag2event tagORevt) :event :ON_TAG_READ))
-          evt (assoc evt
-                     :controler-name controler-name
-                     :controler controler
-                     :rfid-ts (System/currentTimeMillis))]
+                (convert-tag2event tagORevt))
+          evt (merge evt extra)]
       evt)
     (catch Exception e
       (.printStackTrace e)
@@ -184,7 +190,7 @@
 
 (defn create-listener [chan-buf-size sink controler-name controler cleanup-delta d-id-re]
   (let [sink-chan (chan chan-buf-size 
-                        (map (partial t->evt controler-name controler)))]
+                        (map (partial t->evt :ON_TAG_READ controler-name controler)))]
     (start-tag2sink-remove-duplicates d-id-re sink sink-chan)
     (start-timed-cache-cleanup cleanup-delta sink-chan)
     (reify TagReportListener
@@ -194,9 +200,32 @@
             (try
               (>!! sink-chan t) ; la trasformacion la hace el trasducer
               (catch Exception e
-                (.printStackTrace e)))))))))
+                (log/error e)
+                (.printStackTrace e)
+                ))))))))
 
-(defn start-server [sink chan-buf-size controler-name controler RfMode antennas cleanup-delta fastId d-id-re]
+(defn create-keep-alive-listener [controler-name controler]
+  (reify KeepaliveListener 
+    (onKeepalive [_ reader event]
+      (let [e (t->evt :ON_KEEP_ALIVE controler-name controler {})]
+        (log/info e)))))
+
+(defn create-connection-lost-listener [controler-name controler]
+  (reify ConnectionLostListener
+    (onConnectionLost [_ reader]
+      (let [isConnected? (.isConnected reader)
+            e (t->evt :ON_CONNECTION_LOST controler-name controler {:connected isConnected?})]
+        (log/error e)
+        (log/error "Stoping RFID listener...")
+        (.stop reader)
+        (when isConnected?
+          (.disconnect reader))
+        (.connect reader controler)
+        (log/error "Starting RFID listener...")
+        (.start reader)
+        ))))
+
+(defn start-server [sink chan-buf-size controler-name controler RfMode antennas cleanup-delta fastId d-id-re keepalive-ms]
     ;(PropertyConfigurator/configure "log4j.properties")
   (try
     (log/info (format "Starting RFID Server, controler: %s -> antenas: %s" controler antennas))
@@ -212,6 +241,16 @@
                      (.setRfMode (int RfMode))
                      (.setSearchMode com.impinj.octane.SearchMode/DualTarget)
                      (.setSession 2))
+
+          ; ordena al controlador a mandar un evento keepalive cada 3s
+          ; si el controlador no nos puede enviar el evento 5 veces
+          ; el controlador cierra la coneccion
+
+          keepAlives (doto (.getKeepalives settings)
+                       (.setEnabled true)
+                       (.setPeriodInMs keepalive-ms)
+                       (.setEnableLinkMonitorMode true)
+                       (.setLinkDownThreshold 5))
 
           gpos (.getGpos settings)
 
@@ -234,14 +273,19 @@
                    (.setIncludePhaseAngle true)
                    (.setIncludeSeenCount true)
                    (.setMode com.impinj.octane.ReportMode/Individual))
+
           ;igual que report es por referencia GRACIAS OOP! jajaja
           d-antennas (doto (.getAntennas settings)
                        (.disableAll)
                        (.enableById (mapv #(short (first %)) antennas))
                        (configAntennas antennas))
-          listener (create-listener chan-buf-size sink controler-name controler cleanup-delta d-id-re)]
+          listener (create-listener chan-buf-size sink controler-name controler cleanup-delta d-id-re)
+          keepAliveListener (create-keep-alive-listener controler-name controler)
+          connectionLostListener (create-connection-lost-listener controler-name controler)]
       (.applySettings reader settings)
       (.setTagReportListener reader listener)
+      (.setKeepaliveListener reader keepAliveListener)
+      (.setConnectionLostListener reader connectionLostListener)
       (log/info "Starting RFID listener...")
       (.start reader))
     (catch Exception e
@@ -249,14 +293,15 @@
 
 (defmethod start-listener 'caudal.io.rfid-server
   [sink config]
-  (let [{:keys [controler-name controler RfMode antennas cleanup-delta chan-buf-size fastId d-id-re]
+  (let [{:keys [controler-name controler RfMode antennas cleanup-delta chan-buf-size fastId d-id-re keepalive-ms]
          :or {controler-name "name-undefined"
               chan-buf-size 10
               RfMode 1002 
               antennas [[1 true nil]]
               cleanup-delta 10000
-              d-id-re ".*"}} (get-in config [:parameters])
+              d-id-re ".*"
+              keepalive-ms 60000}} (get-in config [:parameters])
         d-id-re (re-pattern d-id-re)]
     (log/info "Filtrando d-id con: " d-id-re)
-    (start-server sink chan-buf-size controler-name controler RfMode antennas cleanup-delta fastId d-id-re)))
+    (start-server sink chan-buf-size controler-name controler RfMode antennas cleanup-delta fastId d-id-re keepalive-ms)))
 
