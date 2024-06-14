@@ -12,5 +12,5 @@ doc/
 # make-distro files
 caudal-*
 resources/public/js/compiled
-
+resources/security
 
