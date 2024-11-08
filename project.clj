@@ -6,8 +6,8 @@
   ;   the terms of this license.
   ;   You must not remove this notice, or any other, from this software
 
-  (defproject caudal "0.8.0"
-    :description "Caudal Platformi 0.8.0"
+  (defproject caudal "0.8.1"
+    :description "Caudal Platformi 0.8.1"
     :url "http://caudal.io/"
     :license {:name "Eclipse Public License"
               :url "http://www.eclipse.org/legal/epl-v10.html"}
@@ -19,10 +19,10 @@
                    [lein-cljsbuild "1.1.4"]]
                    
 
-    :dependencies [[org.clojure/clojure "1.11.1"]
+    :dependencies [[org.clojure/clojure "1.12.0"]
                    [org.clojure/core.async "1.6.681"]
                    [org.clojure/java.jdbc "0.7.12"]
-                   [org.clojure/core.logic "1.0.1"]
+                   [org.clojure/core.logic "1.1.0"]
 
                    ;; logging
                    [org.apache.logging.log4j/log4j-core "2.11.0"]
@@ -86,7 +86,8 @@
                    [clj-fuzzy "0.4.1"]
 
                    [shams/priority-queue "0.1.2"]
-                   [org.clojure/core.match "1.0.1"]
+                   [org.clojure/core.match "1.1.0"]
+                   [defun "0.4.0"]
 
        ; RFID Jimpij
 
