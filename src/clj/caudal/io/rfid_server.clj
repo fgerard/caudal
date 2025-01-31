@@ -1,6 +1,6 @@
 (ns caudal.io.rfid-server
   (:require [clojure.tools.logging :as log]
-            [clojure.core.async :refer [chan go-loop <! >! timeout >!!]]
+            [clojure.core.async :refer [chan go-loop <! >! timeout >!! put! alts! close!]]
             [caudal.streams.common :refer [start-listener]]
             [caudal.util.ns-util :refer [resolve&get-fn require-name-spaces]]
             [clojure.edn :as edn])
@@ -34,7 +34,7 @@
     [fldK (.getUtcTimestamp val-obj)]))
 
 (defmethod get-value-of "default" [bean fld method]
-  (try 
+  (try
     (let [fldK (keyword fld)
           val-obj (.invoke method bean nil)]
       [fldK (str val-obj)])
@@ -71,10 +71,10 @@
 
             (number? rx)
             (.setRxSensitivityinDbm d-antenna rx))
-      
+
       (cond (= tx true)
             (.setIsMaxTxPower d-antenna true)
-            
+
             (number? tx)
             (.setTxPowerinDbm d-antenna tx))
       ;(.setIsMaxRxSensitivity d-antenna true)
@@ -86,31 +86,42 @@
       ))
   antennas-obj)
 
-(def timed-state (atom
-                  {:ids {} ; mapa con id->ts
-                   :id->evt {} ;mapa con id->evt original
-                   :delta 1000
-                   :removed #{}
-                   :last-update 0}))
+(def timed-state (atom {}))
 
-(defn timed-cache-put [id evt]
+; la estructura de este timed-atom es asi:
+#_{:controler-name
+ {  :ids {} ; mapa con id->ts
+    :id->evt {} ;mapa con id->evt original
+    :delta 1000
+    :removed #{}
+    :last-update 0}}
+
+(def default-init-state-Xcontroler {:ids {} ; mapa con id->ts
+                                    :id->evt {} ;mapa con id->evt original
+                                    :delta 1000
+                                    :removed #{}
+                                    :last-update 0})
+
+(defn timed-cache-put [controler-name id evt]
   (swap!
    timed-state
    (fn [state]
      (let [now (System/currentTimeMillis)]
        (-> state
-           (assoc-in [:ids id] now)
-           (assoc-in [:id->evt id] evt)
-           (assoc :last-update now))))))
+           (assoc-in [controler-name :ids id] now)
+           (assoc-in [controler-name :id->evt id] evt)
+           (assoc-in [controler-name :last-update] now))))))
 
-(defn timed-cache-get&clear-removed [delta]
-  (let [{:keys [ids-removed]} 
+(defn timed-cache-get&clear-removed [controler-name delta]
+  (let [d-new-state ;{:keys [ids-removed]}
         (swap!
          timed-state
-         (fn [{:keys [ids id->evt] :as state}]
-           (let [state (dissoc state :removed)
+         (fn [controlers-state]
+           (let [state (get controlers-state controler-name default-init-state-Xcontroler)
+                 {:keys [ids id->evt]} state
+                 state (dissoc state :removed)
                  now (System/currentTimeMillis)
-                 
+
                  {:keys [removed] :as new-state}
                  (reduce
                   (fn [new-state [k k-ts]]
@@ -122,11 +133,13 @@
                             (update :id->evt #(dissoc % k)))
                         new-state)))
                   state
-                  ids)]
-             (-> new-state
-                 (assoc :removed #{})
-                 (assoc :ids-removed removed)))))]
-    ids-removed))
+                  ids)
+                 new-state (-> new-state
+                               (assoc :removed #{})
+                               (assoc :ids-removed removed))]
+             (-> controlers-state
+                 (assoc controler-name new-state)))))]
+    (get-in d-new-state [controler-name :ids-removed])))
 
 (defn convert-tag2event [t]
   (let [isFastIdPresent (.isFastIdPresent t)
@@ -136,38 +149,150 @@
         evt (bean->map t)]
     (assoc evt :d-id d-id)))
 
-(defn send-if-not-in-cache [d-id-re sink {:keys [d-id] :as evt}]
+; atomo que tiene un mapa de tag->chan este chan es el encargado en recibir
+; eventos de este tag
+(def tag->chan (atom {}))
+
+;(defn process-tag [evt])
+
+(defn get-more-frequent [evt-vec]
+  (let [freqs (frequencies (map :AntennaPortNumber evt-vec))
+        antena-group (group-by :AntennaPortNumber evt-vec)
+        largest-anntena (reduce
+                         (fn [evets-1 [_ evets]]
+                           (if (> (count evets) (count evets-1))
+                             evets
+                             evets-1))
+                         nil
+                         antena-group)
+        {:keys [d-id] :as evt-selected} (first largest-anntena)]
+    (log/info (str "VOTING: " d-id " --> " (pr-str freqs)))
+    evt-selected))
+
+(defn make-evt-reduction [controler-name sink evt-vec]
+  (let [selected-evt (get-more-frequent evt-vec)]
+    (swap! tag->chan dissoc (:d-id selected-evt))
+    (timed-cache-put controler-name (:d-id selected-evt) selected-evt)
+    (sink selected-evt)))
+
+(defmulti start-tag-reader-chan (fn [_ conf _ _]
+                                  (log/info (str "TAG.0.9 " conf))
+                                  (:type conf)) :default "default")
+
+; gana el la antena con mas lecturas
+(defmethod start-tag-reader-chan :count [controler-name {:keys [delta] :or {delta 1000}} sink c]
+  (let [ts-end (+ delta (System/currentTimeMillis))]
+    (go-loop [ts (System/currentTimeMillis) reduction []] ; reduccion va a tener todos los eventos de este tag 
+      (log/info (str "TAG.2 reduction:" (count reduction) " - " (- ts-end ts)))
+      (let [[evt ch] (alts! [c (timeout (- ts-end ts))])]
+        (log/info (str "TAG.2.1 " (= c ch) " " (:d-id evt) " --> " (count reduction)))
+        (if (= ch c)
+          (if-not evt
+            (make-evt-reduction controler-name sink reduction)
+            (recur (System/currentTimeMillis) (conj reduction evt)))
+          (do
+            (log/info "TAG.2.2 closing chan")
+            (close! c)
+            (recur 0 reduction) ; con este 0 garantizamos que el alts! regrese por el chan y no el timeout
+            ))))))
+
+(defn make-evt-selected [controler-name sink selected-evt]
+  (swap! tag->chan dissoc (:d-id selected-evt))
+  (timed-cache-put controler-name (:d-id selected-evt) selected-evt)
+  (sink selected-evt))
+
+; con :last gana el ultimo leido
+(defmethod start-tag-reader-chan :last [controler-name {:keys [delta] :or {delta 1000}} sink c]
+  (go-loop [last-evt nil] ; reduccion va a tener todos los eventos de este tag
+    (log/info "TAG.1.0 ")
+    (let [[evt ch] (alts! [c (timeout delta)])]
+      (log/info (str "TAG.1.1 " (= c ch) " " evt))
+      (if (= ch c)
+        (if-not evt
+          (make-evt-selected controler-name sink last-evt)
+          (recur evt)) ; se renueva la espera de 1s y se guarda el último
+        (do
+          (log/info "TAG.1.2 ")
+          (close! c)
+          (recur last-evt) ; como c está cerrado el alts! termina con nil inmediatamente
+          )))))
+
+; con :max gana el que tenga mejor PeakRssiInDb una vez que pase 1 segundo sin lecturas se toma el ultimo leido
+(defmethod start-tag-reader-chan :max [controler-name {:keys [delta] :or {delta 1000}} sink c]
+  (go-loop [last-evt nil] ; reduccion va a tener todos los eventos de este tag
+    (log/info "TAG.1.0 ")
+    (let [[evt ch] (alts! [c (timeout delta)])]
+      (log/info (str "TAG.1.1 " (= c ch) " " evt))
+      (if (= ch c)
+        (if-not evt
+          (make-evt-selected controler-name sink last-evt)
+          (recur (if (> (:PeakRssiInDb evt) (:PeakRssiInDb last-evt -1000)) evt last-evt))) ; se renueva la espera de 1s y se guarda el último
+        (do
+          (log/info "TAG.1.2 ")
+          (close! c)
+          (recur last-evt) ; como c está cerrado el alts! termina con nil inmediatamente
+          )))))
+
+; obtienes o creas el chan de este tag ojo tambien deja un go-loop para eliminarlo al cierre
+(defn get-tag-chan [d-id]
+  (let [[c created?] (-> (swap! tag->chan
+                                (fn [tag->chan-map]
+                                  (let [[c _ :as info] (get tag->chan-map d-id)]
+                                    (if info
+                                      (assoc tag->chan-map d-id [c false])
+                                      (assoc tag->chan-map d-id [(chan) true]))))) ; true indica recien creado
+                         (get d-id))]
+    [c created?]))
+
+; en el siguiente metodo voy a implementar que se almacenen los tags a enviar de manera
+; que se posponga el envio un tiempo determinado, de forma que a lo mejor llegan más de 
+; una lectura del mismo tag e incluso en diferente antena, en el happy path pasado el tiempo 
+; se envia al sink (el flujo normal del caudal) el evento, una vez ya enviado ahora si ya no
+; se manda, es decir al enviar el seleccionado se hace el timed-cache-put
+(defn send-if-not-in-cache [controler-name d-id-re tag-policy sink {:keys [d-id] :as evt}]
   (log/debug :re-matches d-id-re d-id (re-matches d-id-re d-id))
   (if (re-matches d-id-re d-id)
-    (let [;state @timed-state
-        ;_ (log/warn (pr-str [:timed-state d-id :-> state]))
-        ;_ (log/warn (str "---> " (pr-str (get-in @timed-state [:ids d-id])) " exists? "))
-          exists? (get-in @timed-state [:ids d-id])]
-      (timed-cache-put d-id evt)
-      (when-not exists?
-        (sink evt)))
-    (log/info (format "Dropping tag: %s" (pr-str evt)))))
+    (let [tag-exists? (get-in @timed-state [:ids d-id])]
+      ;(timed-cache-put d-id evt)
+      ;(sink evt)
+      (log/info (str "TAG.0 " (pr-str tag-exists?)))
+      (if-not tag-exists?
+        (let [_ (log/info "TAG.0.0")
+              [tag-chan created?] (get-tag-chan d-id)
+              _ (log/info (str "TAG.0.2 " tag-chan "  " created?))]
+          (when created?
+            (start-tag-reader-chan controler-name tag-policy sink tag-chan)) ; esto inicia el loop de lectura de este chan especial para este tag 
+          (log/info (str "TAG.0.3 " d-id))
+          (>!! tag-chan evt)
+          (log/info (str "TAG.0.4 " d-id #_(pr-str evt))))
+        (timed-cache-put controler-name d-id evt) ; este else es importante para por si se queda ahi el tag
+                                   ; con esto renuevas el que ya no salga     
+        ))
+    (log/debug (format "Dropping tag: %s" (pr-str evt)))))
 
-(defn start-tag2sink-remove-duplicates [d-id-re sink sink-chan]
+(defn start-tag2sink-remove-duplicates [controler-name d-id-re sink tag-policy sink-chan]
   (go-loop [{:keys [event] :as e} (<! sink-chan)]
+    (log/debug (str "TAG.00 " controler-name sink-chan (pr-str e)))
     (condp = event
-      :ON_TAG_READ (send-if-not-in-cache d-id-re sink e)
+      :ON_TAG_READ (send-if-not-in-cache controler-name d-id-re tag-policy sink e)
       :ON_TAG_REMOVED (sink e)
       ;:ON_TAG_READ (sink e)
       )
     (recur (<! sink-chan))))
 
-(defn start-timed-cache-cleanup [delta-loop sink-chan]
-  (go-loop [removed-now (timed-cache-get&clear-removed delta-loop)]
+(defn start-timed-cache-cleanup [controler-name delta-loop sink sink-chan]
+  (go-loop [removed-now (timed-cache-get&clear-removed controler-name delta-loop)]
     #_(when (seq removed-now)
-      (log/info (pr-str [:removig-tags (mapv :d-id removed-now)])))
+        (log/info (pr-str [:removig-tags (mapv :d-id removed-now)])))
     (doseq [{:keys [d-id] :as evt} removed-now]
       (let [removed-event (merge evt {:event :ON_TAG_REMOVED
                                       :rfid-ts (System/currentTimeMillis)})]
-        (log/info (pr-str [:removing-tag evt]))
-        (>! sink-chan removed-event)))
+        (log/info (pr-str [:removing-tag controler-name " " sink-chan " " removed-event]))
+        ;(>! sink-chan removed-event)
+        (sink removed-event)
+        ))
     (<! (timeout delta-loop))
-    (recur (timed-cache-get&clear-removed delta-loop))))
+    (recur (timed-cache-get&clear-removed controler-name delta-loop))))
 
 (defn t->evt [evt-key controler-name controler tagORevt]
   (try
@@ -188,24 +313,25 @@
        :msg (.getMessage e)
        :rfid-ts (System/currentTimeMillis)})))
 
-(defn create-listener [chan-buf-size sink controler-name controler cleanup-delta d-id-re]
-  (let [sink-chan (chan chan-buf-size 
+(defn create-listener [chan-buf-size sink controler-name controler cleanup-delta d-id-re tag-policy]
+  (let [sink-chan (chan chan-buf-size
                         (map (partial t->evt :ON_TAG_READ controler-name controler)))]
-    (start-tag2sink-remove-duplicates d-id-re sink sink-chan)
-    (start-timed-cache-cleanup cleanup-delta sink-chan)
+    (log/warn (str "create-listener " controler-name " " sink-chan))
+    (start-tag2sink-remove-duplicates controler-name d-id-re sink tag-policy sink-chan)
+    (start-timed-cache-cleanup controler-name cleanup-delta sink sink-chan)
     (reify TagReportListener
       (onTagReported [_ reader report]
         (let [tags (.getTags report)]
-          (doseq [t tags] 
+          (doseq [t tags]
+            (log/debug (str "TagReporterListener: " controler-name (pr-str t)))
             (try
               (>!! sink-chan t) ; la trasformacion la hace el trasducer
               (catch Exception e
                 (log/error e)
-                (.printStackTrace e)
-                ))))))))
+                (.printStackTrace e)))))))))
 
 (defn create-keep-alive-listener [controler-name controler]
-  (reify KeepaliveListener 
+  (reify KeepaliveListener
     (onKeepalive [_ reader event]
       (let [e (t->evt :ON_KEEP_ALIVE controler-name controler {})]
         (log/info e)))))
@@ -222,10 +348,10 @@
           (.disconnect reader))
         (.connect reader controler)
         (log/error "Starting RFID listener...")
-        (.start reader)
-        ))))
+        (.start reader)))))
 
-(defn start-server [sink chan-buf-size controler-name controler RfMode antennas cleanup-delta fastId d-id-re keepalive-ms]
+(defn start-server [sink chan-buf-size controler-name controler RfMode antennas
+                    cleanup-delta fastId d-id-re keepalive-ms tag-policy]
     ;(PropertyConfigurator/configure "log4j.properties")
   (try
     (log/info (format "Starting RFID Server, controler: %s -> antenas: %s" controler antennas))
@@ -279,7 +405,7 @@
                        (.disableAll)
                        (.enableById (mapv #(short (first %)) antennas))
                        (configAntennas antennas))
-          listener (create-listener chan-buf-size sink controler-name controler cleanup-delta d-id-re)
+          listener (create-listener chan-buf-size sink controler-name controler cleanup-delta d-id-re tag-policy)
           keepAliveListener (create-keep-alive-listener controler-name controler)
           connectionLostListener (create-connection-lost-listener controler-name controler)]
       (.applySettings reader settings)
@@ -287,21 +413,26 @@
       (.setKeepaliveListener reader keepAliveListener)
       (.setConnectionLostListener reader connectionLostListener)
       (log/info "Starting RFID listener...")
-      (.start reader))
+      (.start reader)
+      reader)
     (catch Exception e
       (.printStackTrace e))))
 
 (defmethod start-listener 'caudal.io.rfid-server
   [sink config]
-  (let [{:keys [controler-name controler RfMode antennas cleanup-delta chan-buf-size fastId d-id-re keepalive-ms]
+  (let [{:keys [controler-name controler RfMode antennas
+                cleanup-delta chan-buf-size
+                fastId d-id-re keepalive-ms
+                tag-policy]
          :or {controler-name "name-undefined"
               chan-buf-size 10
-              RfMode 1002 
+              RfMode 1002
               antennas [[1 true nil]]
               cleanup-delta 10000
               d-id-re ".*"
+              tag-policy {:type :max :delta 3000}
               keepalive-ms 60000}} (get-in config [:parameters])
         d-id-re (re-pattern d-id-re)]
     (log/info "Filtrando d-id con: " d-id-re)
-    (start-server sink chan-buf-size controler-name controler RfMode antennas cleanup-delta fastId d-id-re keepalive-ms)))
+    (start-server sink chan-buf-size controler-name controler RfMode antennas cleanup-delta fastId d-id-re keepalive-ms tag-policy)))
 
