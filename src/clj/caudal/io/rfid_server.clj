@@ -117,29 +117,36 @@
         (swap!
          timed-state
          (fn [controlers-state]
-           (let [state (get controlers-state controler-name default-init-state-Xcontroler)
-                 {:keys [ids id->evt]} state
-                 state (dissoc state :removed)
+           (let [; sacamos la seccion dentro de este atomo de un controller
+                 controler-state (get controlers-state controler-name default-init-state-Xcontroler)
+                 {:keys [ids id->evt]} controler-state
+                ;state (dissoc state :removed)
+                 controler-state (assoc controler-state :removed #{})
                  now (System/currentTimeMillis)
 
-                 {:keys [removed] :as new-state}
+                 ;{:keys [removed] :as new-state}
+                 new-controler-state
                  (reduce
                   (fn [new-state [k k-ts]]
                     (let [k-ts (if (nil? k-ts) 0 k-ts)]
                       (if (> (- now k-ts) delta)
                         (-> new-state
+                            ; generamos el set de eventos a remover
                             (update :removed #(conj % (id->evt k)))
+                            ; lo quitamos de las lista ide id->ts y de id->evt
                             (update :ids #(dissoc % k))
                             (update :id->evt #(dissoc % k)))
                         new-state)))
-                  state
+                  controler-state
                   ids)
-                 new-state (-> new-state
-                               (assoc :removed #{})
-                               (assoc :ids-removed removed))]
-             (-> controlers-state
-                 (assoc controler-name new-state)))))]
-    (get-in d-new-state [controler-name :ids-removed])))
+                 ;new-state (-> new-state
+                               ;(assoc :removed #{})
+                               ;(assoc :ids-removed removed))
+                 ]
+             (assoc controlers-state controler-name new-controler-state))))]
+    ;(get-in d-new-state [controler-name :ids-removed])
+    (get-in d-new-state [controler-name :removed])
+    ))
 
 (defn convert-tag2event [t]
   (let [isFastIdPresent (.isFastIdPresent t)
@@ -203,7 +210,7 @@
 
 ; con :last gana el ultimo leido
 (defmethod start-tag-reader-chan :last [controler-name {:keys [delta] :or {delta 1000}} sink c]
-  (go-loop [last-evt nil] ; reduccion va a tener todos los eventos de este tag
+  (go-loop [last-evt nil] ; last-evt va a tener el último evento recibido
     (log/info "TAG.1.0 ")
     (let [[evt ch] (alts! [c (timeout delta)])]
       (log/info (str "TAG.1.1 " (= c ch) " " evt))
@@ -219,18 +226,18 @@
 
 ; con :max gana el que tenga mejor PeakRssiInDb una vez que pase 1 segundo sin lecturas se toma el ultimo leido
 (defmethod start-tag-reader-chan :max [controler-name {:keys [delta] :or {delta 1000}} sink c]
-  (go-loop [last-evt nil] ; reduccion va a tener todos los eventos de este tag
+  (go-loop [max-evt nil] ; rmax-evt va a tener el evento con PeakRssiInDb más grande (menos negativo)
     (log/info "TAG.1.0 ")
     (let [[evt ch] (alts! [c (timeout delta)])]
       (log/info (str "TAG.1.1 " (= c ch) " " evt))
       (if (= ch c)
         (if-not evt
-          (make-evt-selected controler-name sink last-evt)
-          (recur (if (> (:PeakRssiInDb evt) (:PeakRssiInDb last-evt -1000)) evt last-evt))) ; se renueva la espera de 1s y se guarda el último
+          (make-evt-selected controler-name sink max-evt)
+          (recur (if (> (:PeakRssiInDb evt) (:PeakRssiInDb max-evt -1000)) evt max-evt))) ; se renueva la espera de 1s y se guarda el último
         (do
           (log/info "TAG.1.2 ")
           (close! c)
-          (recur last-evt) ; como c está cerrado el alts! termina con nil inmediatamente
+          (recur max-evt) ; como c está cerrado el alts! termina con nil inmediatamente
           )))))
 
 ; obtienes o creas el chan de este tag ojo tambien deja un go-loop para eliminarlo al cierre
@@ -271,13 +278,17 @@
     (log/debug (format "Dropping tag: %s" (pr-str evt)))))
 
 (defn start-tag2sink-remove-duplicates [controler-name d-id-re sink tag-policy sink-chan]
-  (go-loop [{:keys [event] :as e} (<! sink-chan)]
-    (log/debug (str "TAG.00 " controler-name sink-chan (pr-str e)))
-    (condp = event
-      :ON_TAG_READ (send-if-not-in-cache controler-name d-id-re tag-policy sink e)
-      :ON_TAG_REMOVED (sink e)
-      ;:ON_TAG_READ (sink e)
-      )
+  (go-loop [{:keys [event RfDopplerFrequency] :as e} (<! sink-chan)] ; RfDopplerFrequency es string y negativo significa que se aleja
+    (let [{:keys [direction] :or {direction :none}} tag-policy
+          use-it (condp = direction
+                  :approaching (> (Double/parseDouble RfDopplerFrequency) 0) 
+                  :receding    (<= (Double/parseDouble RfDopplerFrequency) 0)
+                  true)]
+      (if  use-it
+        (condp = event
+          :ON_TAG_READ (send-if-not-in-cache controler-name d-id-re tag-policy sink e)
+          :ON_TAG_REMOVED (sink e))
+        (log/info (str  "TAG.00 filtrando evento: " direction event))))
     (recur (<! sink-chan))))
 
 (defn start-timed-cache-cleanup [controler-name delta-loop sink sink-chan]
@@ -324,7 +335,7 @@
         (let [tags (.getTags report)]
           (doseq [t tags]
             (log/debug (str "TagReporterListener: " controler-name (pr-str t)))
-            (try
+            (try 
               (>!! sink-chan t) ; la trasformacion la hace el trasducer
               (catch Exception e
                 (log/error e)
