@@ -1,6 +1,6 @@
 (ns caudal.io.rfid-server
   (:require [clojure.tools.logging :as log]
-            [clojure.core.async :refer [chan go-loop <! >! timeout >!! put! alts! close!]]
+            [clojure.core.async :refer [chan go go-loop <! >! timeout >!! put! alts! close!]]
             [caudal.streams.common :refer [start-listener]]
             [caudal.util.ns-util :refer [resolve&get-fn require-name-spaces]]
             [clojure.edn :as edn])
@@ -347,19 +347,31 @@
       (let [e (t->evt :ON_KEEP_ALIVE controler-name controler {})]
         (log/info e)))))
 
+(defn create-reconnect2antenna-channel []
+  (let [reconnect-chan (chan 10)]
+    (go-loop [[controler-name controler reader] (<! reconnect-chan)]
+      (try
+        (log/error "Reconnecting reader " controler-name)
+        (.connect reader controler)
+        (.start reader)
+        (log/error controler-name " reconected!")
+        (catch Throwable t
+          (go 
+            (log/error "Reconeccion no exitosa, reintentando el 60s")
+            (<! (timeout 60000))
+            (>! reconnect-chan [controler-name controler reader]))))
+      (recur (<! reconnect-chan)))
+    reconnect-chan))
+
+(def reconnect-chan (create-reconnect2antenna-channel))
+
 (defn create-connection-lost-listener [controler-name controler]
   (reify ConnectionLostListener
     (onConnectionLost [_ reader]
       (let [isConnected? (.isConnected reader)
             e (t->evt :ON_CONNECTION_LOST controler-name controler {:connected isConnected?})]
         (log/error e)
-        (log/error "Stoping RFID listener...")
-        (.stop reader)
-        (when isConnected?
-          (.disconnect reader))
-        (.connect reader controler)
-        (log/error "Starting RFID listener...")
-        (.start reader)))))
+        (put! reconnect-chan [controler-name controler reader])))))
 
 (defn start-server [sink chan-buf-size controler-name controler RfMode antennas
                     cleanup-delta fastId d-id-re keepalive-ms tag-policy]

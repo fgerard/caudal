@@ -6,8 +6,8 @@
   ;   the terms of this license.
   ;   You must not remove this notice, or any other, from this software
 
-  (defproject caudal "0.8.3"
-    :description "Caudal Platform 0.8.2"
+  (defproject caudal "0.8.4"
+    :description "Caudal Platform 0.8.4"
     :url "http://caudal.io/"
     :license {:name "Eclipse Public License"
               :url "http://www.eclipse.org/legal/epl-v10.html"}
