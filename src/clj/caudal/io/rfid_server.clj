@@ -347,31 +347,35 @@
       (let [e (t->evt :ON_KEEP_ALIVE controler-name controler {})]
         (log/info e)))))
 
+
+(declare start-server)
+
 (defn create-reconnect2antenna-channel []
   (let [reconnect-chan (chan 10)]
-    (go-loop [[controler-name controler reader] (<! reconnect-chan)]
-      (try
-        (log/error "Reconnecting reader " controler-name)
-        (.connect reader controler)
-        (.start reader)
-        (log/error controler-name " reconected!")
-        (catch Throwable t
-          (go 
-            (log/error "Reconeccion no exitosa, reintentando el 60s")
-            (<! (timeout 60000))
-            (>! reconnect-chan [controler-name controler reader]))))
+    (go-loop [[sink chan-buf-size controler-name controler RfMode antennas
+               cleanup-delta fastId d-id-re keepalive-ms tag-policy] (<! reconnect-chan)]
+      (log/error "Reconnecting reader " controler-name)
+      (when-not (start-server sink chan-buf-size controler-name controler RfMode antennas
+                              cleanup-delta fastId d-id-re keepalive-ms tag-policy)
+        (go
+          (log/error "Reconeccion no exitosa, reintentando el 60s")
+          (<! (timeout 60000))
+          (>! reconnect-chan [[sink chan-buf-size controler-name controler RfMode antennas
+                               cleanup-delta fastId d-id-re keepalive-ms tag-policy]])))
       (recur (<! reconnect-chan)))
     reconnect-chan))
 
 (def reconnect-chan (create-reconnect2antenna-channel))
 
-(defn create-connection-lost-listener [controler-name controler]
+(defn create-connection-lost-listener [sink chan-buf-size controler-name controler RfMode antennas
+                                       cleanup-delta fastId d-id-re keepalive-ms tag-policy]
   (reify ConnectionLostListener
     (onConnectionLost [_ reader]
       (let [isConnected? (.isConnected reader)
             e (t->evt :ON_CONNECTION_LOST controler-name controler {:connected isConnected?})]
         (log/error e)
-        (put! reconnect-chan [controler-name controler reader])))))
+        (put! reconnect-chan [sink chan-buf-size controler-name controler RfMode antennas
+                              cleanup-delta fastId d-id-re keepalive-ms tag-policy])))))
 
 (defn start-server [sink chan-buf-size controler-name controler RfMode antennas
                     cleanup-delta fastId d-id-re keepalive-ms tag-policy]
@@ -430,7 +434,8 @@
                        (configAntennas antennas))
           listener (create-listener chan-buf-size sink controler-name controler cleanup-delta d-id-re tag-policy)
           keepAliveListener (create-keep-alive-listener controler-name controler)
-          connectionLostListener (create-connection-lost-listener controler-name controler)]
+          connectionLostListener (create-connection-lost-listener sink chan-buf-size controler-name controler RfMode antennas
+                                                                  cleanup-delta fastId d-id-re keepalive-ms tag-policy)]
       (.applySettings reader settings)
       (.setTagReportListener reader listener)
       (.setKeepaliveListener reader keepAliveListener)
