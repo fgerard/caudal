@@ -371,11 +371,14 @@
                                        cleanup-delta fastId d-id-re keepalive-ms tag-policy]
   (reify ConnectionLostListener
     (onConnectionLost [_ reader]
-      (let [isConnected? (.isConnected reader)
-            e (t->evt :ON_CONNECTION_LOST controler-name controler {:connected isConnected?})]
-        (log/error e)
-        (put! reconnect-chan [sink chan-buf-size controler-name controler RfMode antennas
-                              cleanup-delta fastId d-id-re keepalive-ms tag-policy])))))
+      (try
+        (let [isConnected? (.isConnected reader)
+              e (t->evt :ON_CONNECTION_LOST controler-name controler {:connected isConnected?})]
+          (log/error e)
+          (put! reconnect-chan [sink chan-buf-size controler-name controler RfMode antennas
+                                cleanup-delta fastId d-id-re keepalive-ms tag-policy]))
+        (catch Throwable t
+          (log/error t))))))
 
 (defn start-server [sink chan-buf-size controler-name controler RfMode antennas
                     cleanup-delta fastId d-id-re keepalive-ms tag-policy]
@@ -444,6 +447,7 @@
       (.start reader)
       reader)
     (catch Exception e
+      (log/error e)
       (.printStackTrace e))))
 
 (defmethod start-listener 'caudal.io.rfid-server
