@@ -98,7 +98,7 @@
           ;(log/debug :opts (pr-str opts))
           (println "Configuring log4j2 from:" (.getCanonicalPath (log4j2-xml path)))
           (-> (cast LoggerContext (LogManager/getContext false)) (.setConfigLocation (.toURI (log4j2-xml path))))
-          (.addShutdownHook (Runtime/getRuntime) (Thread. #(log/info {:caudal :shudown})))
+          (.addShutdownHook (Runtime/getRuntime) (Thread. #(log/info {:caudal :shutdown})))
           (log/info (pr-str {:caudal :start :version version}))
           (loader (:pass opts) path)))
       (do
