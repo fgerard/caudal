@@ -43,7 +43,7 @@
 (defn check4inactivity []
   (loop [n 0]
     (try
-      (log/info "checking for inactivity in 60000" ms  n)
+      (log/info "checking for inactivity in 60000 ms"  n)
       (Thread/sleep 60000)
       (log/info :check4inactivity n)
       (swap! listeners-atom internal_check4inactivity)
