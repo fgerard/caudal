@@ -44,7 +44,8 @@
   (log/info "checking for inactivity in 60000ms")
   (Thread/sleep 60000)
   (log/info :check4inactivity)
-  (swap! listeners-atom internal_check4inactivity))
+  (swap! listeners-atom internal_check4inactivity)
+  (future-call check4inactivity))
 
 (defonce inactivity-verifier-flag (atom false))
 
@@ -53,9 +54,7 @@
          (fn [flg] 
            (when-not flg
              (log/info "inactivity loop started")
-             (future
-               (loop [verifier @(future-call check4inactivity)]
-                 (recur @(future-call check4inactivity)))))
+             (future-call check4inactivity))
            true)))
 
 (defmulti get-value-of (fn [bean fld method]
