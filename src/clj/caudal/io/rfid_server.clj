@@ -10,6 +10,47 @@
                               ConnectionLostListener
                               GpoMode)))
 
+; este atomo tiene un mapa que como llave controler-name_controles y como valor
+; tiene el partial de arranque listo para crear uno nuevo y el listener actual
+; tendrémos un timer de 15 min que si no hay eventos tag en el listener se
+; le da .disconnect() y luego usando la funcion constructora se recrea el 
+; objeto con retryes y espacio entre retrys
+; ej: {"192.168.10.31" {:last-read 1234557372 :ctor <ctor-fun> :listener <impinj-reader>}}
+(defonce listeners-atom (atom {}))
+
+(defn restart?-reduction [now result [controler V]]
+  (let [{:keys [last-read ctor listener inactivity]} V]
+    (if (> (- now last-read) inactivity)
+      (try 
+        (let [_ (log/warn (pr-str [:desconectando-controladora controler]))
+                 _ (.disconnect listener) ; desconectamos el listener inactivo
+                 new-listener (ctor) ; creamos nuevo listener
+                 ]
+             (assoc result controler {:last-read now
+                                      :ctor ctor
+                                      :listener new-listener}))
+        (catch Exception e
+          (log/error e)
+          (assoc result controler (assoc V :last-read now))))
+      (assoc result controler V))))
+
+(defn internal_check4inactivity [listeners-map]
+  (let [now (System/currentTimeMillis)]
+    (reduce (partial restart?-reduction now)
+            {}
+            listeners-map)))
+
+(defn check4inactivity []
+  (log/info "checking for inactivity in 60000ms")
+  (Thread/sleep 60000)
+  (log/info :check4inactivity)
+  (swap! listeners-atom internal_check4inactivity))
+
+(defonce inactivity-verifier 
+  (future 
+    (loop [verifier @(future-call check4inactivity)]
+      (recur @(future-call check4inactivity)))))
+
 (defmulti get-value-of (fn [bean fld method]
                          fld) :default "default")
 
@@ -335,7 +376,11 @@
         (let [tags (.getTags report)]
           (doseq [t tags]
             (log/debug (str "TagReporterListener: " controler-name (pr-str t)))
-            (try 
+            (try
+              ; actualizamos que este leyo tag ahora
+              (swap! 
+               listeners-atom 
+               assoc-in [controler :last-read] (System/currentTimeMillis))
               (>!! sink-chan t) ; la trasformacion la hace el trasducer
               (catch Exception e
                 (log/error e)
@@ -381,7 +426,7 @@
           (log/error t))))))
 
 (defn start-server [sink chan-buf-size controler-name controler RfMode antennas
-                    cleanup-delta fastId d-id-re keepalive-ms tag-policy]
+                    cleanup-delta fastId d-id-re keepalive-ms tag-policy inactivity]
     ;(PropertyConfigurator/configure "log4j.properties")
   (try
     (log/info (format "Starting RFID Server, controler: %s -> antenas: %s" controler antennas))
@@ -401,7 +446,7 @@
           ; ordena al controlador a mandar un evento keepalive cada 3s
           ; si el controlador no nos puede enviar el evento 5 veces
           ; el controlador cierra la coneccion
-
+          
           keepAlives (doto (.getKeepalives settings)
                        (.setEnabled true)
                        (.setPeriodInMs keepalive-ms)
@@ -455,7 +500,7 @@
   (let [{:keys [controler-name controler RfMode antennas
                 cleanup-delta chan-buf-size
                 fastId d-id-re keepalive-ms
-                tag-policy]
+                tag-policy inactivity]
          :or {controler-name "name-undefined"
               chan-buf-size 10
               RfMode 1002
@@ -463,8 +508,17 @@
               cleanup-delta 10000
               d-id-re ".*"
               tag-policy {:type :max :delta 3000}
-              keepalive-ms 60000}} (get-in config [:parameters])
-        d-id-re (re-pattern d-id-re)]
-    (log/info "Filtrando d-id con: " d-id-re)
-    (start-server sink chan-buf-size controler-name controler RfMode antennas cleanup-delta fastId d-id-re keepalive-ms tag-policy)))
+              keepalive-ms 60000
+              inactivity (* 15 60 1000)}} (get-in config [:parameters])
+        d-id-re (re-pattern d-id-re)
+        _ (log/info "Filtrando d-id con: " d-id-re)
+        d-starter (partial start-server sink chan-buf-size controler-name controler RfMode antennas cleanup-delta fastId d-id-re keepalive-ms tag-policy inactivity)
+        d-server (d-starter)]
+     
+    (swap! listeners-atom assoc controler {:last-read (System/currentTimeMillis)
+                                           :ctor d-starter
+                                           :listener d-server
+                                           :inactivity inactivity}) 
+    ;(start-server sink chan-buf-size controler-name controler RfMode antennas cleanup-delta fastId d-id-re keepalive-ms tag-policy)
+    ))
 
