@@ -46,10 +46,17 @@
   (log/info :check4inactivity)
   (swap! listeners-atom internal_check4inactivity))
 
-(defonce inactivity-verifier 
-  (future 
-    (loop [verifier @(future-call check4inactivity)]
-      (recur @(future-call check4inactivity)))))
+(defonce inactivity-verifier-flag (atom false))
+
+(defn start-inactivity-loop-if-not-started []
+  (swap! inactivity-verifier-flag 
+         (fn [flg] 
+           (when-not flg
+             (log/info "inactivity loop started")
+             (future
+               (loop [verifier @(future-call check4inactivity)]
+                 (recur @(future-call check4inactivity)))))
+           true)))
 
 (defmulti get-value-of (fn [bean fld method]
                          fld) :default "default")
@@ -514,7 +521,7 @@
         _ (log/info "Filtrando d-id con: " d-id-re)
         d-starter (partial start-server sink chan-buf-size controler-name controler RfMode antennas cleanup-delta fastId d-id-re keepalive-ms tag-policy inactivity)
         d-server (d-starter)]
-     
+    (start-inactivity-loop-if-not-started)
     (swap! listeners-atom assoc controler {:last-read (System/currentTimeMillis)
                                            :ctor d-starter
                                            :listener d-server
