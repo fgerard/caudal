@@ -41,11 +41,16 @@
             listeners-map)))
 
 (defn check4inactivity []
-  (log/info "checking for inactivity in 60000ms")
-  (Thread/sleep 60000)
-  (log/info :check4inactivity)
-  (swap! listeners-atom internal_check4inactivity)
-  (future-call check4inactivity))
+  (loop [n 0]
+    (try
+      (log/info "checking for inactivity in 60000" ms  n)
+      (Thread/sleep 60000)
+      (log/info :check4inactivity n)
+      (swap! listeners-atom internal_check4inactivity)
+      (catch Exception e
+        (log/error e)
+        (Thread/sleep 60000)))
+    (recur (inc n))))
 
 (defonce inactivity-verifier-flag (atom false))
 
