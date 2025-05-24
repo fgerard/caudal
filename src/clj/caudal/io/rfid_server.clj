@@ -18,20 +18,48 @@
 ; ej: {"192.168.10.31" {:last-read 1234557372 :ctor <ctor-fun> :listener <impinj-reader>}}
 (defonce listeners-atom (atom {}))
 
+(defn stop&disconnect [listener controler]
+  (try
+    (log/info "INACTIVITY: stopping " controler)
+    (.stop listener)
+    (log/info "INACTIVITY: stoped " controler)
+    (Thread/sleep 500)
+    (log/info "INACTIVITY: disconnecting " controler)
+    (.disconnect listener)
+    (Thread/sleep 500)
+    (log/info "INACTIVITY: disconnected " controler)
+    true
+    (catch Exception e
+      (log/error "INACTIVITY: disconnect error " controler)
+      (log/error e)
+      false)))
+
+(defn create-new-listener [ctor controler]
+  (try
+    (log/info "INACTIVITY: Creating listener " controler)
+    (let [listener (ctor)]
+      (log/info "INACTIVITY: Created listener " controler)
+      listener)
+    (catch Exception e
+      (log/error "INACTIVITY: Error creating listener " controler)
+      (log/error e))))
+
 (defn restart?-reduction [now result [controler V]]
+  (log/info (pr-str [:restart?-reduction now controler V]))
   (let [{:keys [last-read ctor listener inactivity]} V]
-    (if (> (- now last-read) inactivity)
-      (try 
-        (let [_ (log/warn (pr-str [:desconectando-controladora controler]))
-                 _ (.disconnect listener) ; desconectamos el listener inactivo
-                 new-listener (ctor) ; creamos nuevo listener
-                 ]
-             (assoc result controler {:last-read now
-                                      :ctor ctor
-                                      :listener new-listener}))
-        (catch Exception e
-          (log/error e)
-          (assoc result controler (assoc V :last-read now))))
+    (if (not inactivity)
+      (log/error "INACTIVITY: se perdio el inactivity"))
+    (if (> (- now last-read) (or inactivity 900000))
+      (let [; desconectamos el listener inactivo 
+            disconnected-ok? (stop&disconnect listener controler)]
+        (if disconnected-ok?
+          (if-let [new-listener (create-new-listener ctor controler)]
+            (assoc result controler {:last-read now
+                                     :ctor ctor
+                                     :listener new-listener
+                                     :inactivity (or inactivity 900000)})
+            (assoc result controler (update V assoc :last-read now)))
+          (assoc result controler (update V assoc :last-read now))))
       (assoc result controler V))))
 
 (defn internal_check4inactivity [listeners-map]
@@ -437,7 +465,7 @@
           (log/error t))))))
 
 (defn start-server [sink chan-buf-size controler-name controler RfMode antennas
-                    cleanup-delta fastId d-id-re keepalive-ms tag-policy inactivity]
+                    cleanup-delta fastId d-id-re keepalive-ms tag-policy]
     ;(PropertyConfigurator/configure "log4j.properties")
   (try
     (log/info (format "Starting RFID Server, controler: %s -> antenas: %s" controler antennas))
@@ -523,7 +551,7 @@
               inactivity (* 15 60 1000)}} (get-in config [:parameters])
         d-id-re (re-pattern d-id-re)
         _ (log/info "Filtrando d-id con: " d-id-re)
-        d-starter (partial start-server sink chan-buf-size controler-name controler RfMode antennas cleanup-delta fastId d-id-re keepalive-ms tag-policy inactivity)
+        d-starter (partial start-server sink chan-buf-size controler-name controler RfMode antennas cleanup-delta fastId d-id-re keepalive-ms tag-policy)
         d-server (d-starter)]
     (start-inactivity-loop-if-not-started)
     (swap! listeners-atom assoc controler {:last-read (System/currentTimeMillis)
