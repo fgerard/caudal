@@ -368,17 +368,18 @@
 
 (defn start-tag2sink-remove-duplicates [controler-name d-id-re sink tag-policy sink-chan]
   (go-loop [{:keys [event RfDopplerFrequency] :as e} (<! sink-chan)] ; RfDopplerFrequency es string y negativo significa que se aleja
-    (let [{:keys [direction] :or {direction :none}} tag-policy
-          use-it (condp = direction
-                  :approaching (> (Double/parseDouble RfDopplerFrequency) 0) 
-                  :receding    (<= (Double/parseDouble RfDopplerFrequency) 0)
-                  true)]
-      (if  use-it
-        (condp = event
-          :ON_TAG_READ (send-if-not-in-cache controler-name d-id-re tag-policy sink e)
-          :ON_TAG_REMOVED (sink e))
-        (log/info (str  "TAG.00 filtrando evento: " direction event))))
-    (recur (<! sink-chan))))
+    (when e
+      (let [{:keys [direction] :or {direction :none}} tag-policy
+            use-it (condp = direction
+                     :approaching (> (Double/parseDouble RfDopplerFrequency) 0) 
+                     :receding    (<= (Double/parseDouble RfDopplerFrequency) 0)
+                     true)]
+        (if  use-it
+          (condp = event
+            :ON_TAG_READ (send-if-not-in-cache controler-name d-id-re tag-policy sink e)
+            :ON_TAG_REMOVED (sink e))
+          (log/info (str  "TAG.00 filtrando evento: " direction event))))
+      (recur (<! sink-chan)))))
 
 (defn start-timed-cache-cleanup [controler-name delta-loop sink sink-chan]
   (go-loop [removed-now (timed-cache-get&clear-removed controler-name delta-loop)]

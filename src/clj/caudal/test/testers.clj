@@ -11,7 +11,7 @@
             [clojure.string :as str]
             [clojure.java.io :as io]
             [clojure.tools.logging :as log]
-            [clojure.core.async :as async :refer [chan go go-loop buffer timeout <! >! <!! >!!]]
+            [clojure.core.async :as async :refer [close! chan go go-loop buffer timeout <! >! <!! >!!]]
             [immutant.caching :as C]
             [caudal.core.state :as ST]
             [caudal.core.atom-state]
@@ -337,3 +337,14 @@
         (.renameTo (io/file (io/file d) v) (io/file (io/file "test") v))))))
 
 )
+
+(comment 
+  (def c (chan))
+  
+
+  (go
+    (let [x (<! c)]
+      (println "salio: " x)))
+                                                                     ;(fn [e] (log/debug :window (count e) e))
+  (close! c)
+  ) 
