@@ -18,7 +18,7 @@
 ;                       :ctor <ctor-fun> 
 ;                       :sink-chan <sink-chan>
 ;                       :inactivity <inactivity ms}}
-(defonce listeners-atom (atom {}))
+(defonce listeners-agent (agent {}))
 
 (defn stop&disconnect [listener controler]
   (try
@@ -39,9 +39,9 @@
 (defn create-new-listener [ctor controler]
   (try
     (log/info "INACTIVITY: Creating listener " controler)
-    (let [new-sink-chan (ctor)]
+    (let [el-par (ctor)]
       (log/info "INACTIVITY: Created listener " controler)
-      new-sink-chan)
+      el-par)
     (catch Exception e
       (log/error "INACTIVITY: Error creating listener " controler)
       (log/error e))))
@@ -57,8 +57,8 @@
         ; desconectamos el listener inactivo cerrando en sink-chan 
         (when sink-chan
           (close! sink-chan)
-          (Thread/sleep 1000)) 
-        (if-let [new-sink-chan (create-new-listener ctor controler)]
+          #_(Thread/sleep 1000)) 
+        (if-let [[_ new-sink-chan] (create-new-listener ctor controler)]
           (assoc result controler {:last-read now
                                    :ctor ctor
                                    :sink-chan new-sink-chan
@@ -82,7 +82,7 @@
       (log/info "checking for inactivity in 60000 ms"  n)
       (Thread/sleep 60000)
       (log/info :check4inactivity n)
-      (swap! listeners-atom internal_check4inactivity)
+      (send listeners-agent internal_check4inactivity)
       (catch Exception e
         (log/error e)
         (Thread/sleep 60000)))
@@ -415,11 +415,11 @@
        :msg (.getMessage e)
        :rfid-ts (System/currentTimeMillis)})))
 
-(defn put-event-in-sink [listeners-atom controler sink-chan t]
+(defn put-event-in-sink [listeners-agent controler sink-chan t]
   (try
     ; actualizamos que este leyo tag ahora
-    (swap!
-     listeners-atom
+    (send
+     listeners-agent
      assoc-in [controler :last-read] (System/currentTimeMillis))
     (>!! sink-chan t) ; la trasformacion la hace el trasducer
     (catch Exception e
@@ -437,7 +437,7 @@
         (onTagReported [_ reader report]
           (let [tags (.getTags report)]
             (loop [[t & rest] tags]
-              (when (and t (put-event-in-sink listeners-atom controler sink-chan t))
+              (when (and t (put-event-in-sink listeners-agent controler sink-chan t))
                 (recur rest)))))) sink-chan]))
 
 (defn create-keep-alive-listener [controler-name controler]
@@ -543,7 +543,7 @@
       (.setConnectionLostListener reader connectionLostListener)
       (log/info "Starting RFID listener...")
       (.start reader)
-      sink-chan)
+      [reader sink-chan])
     (catch Exception e
       (log/error e)
       (.printStackTrace e))))
@@ -566,13 +566,14 @@
         d-id-re (re-pattern d-id-re)
         _ (log/info "Filtrando d-id con: " d-id-re)
         d-starter (partial start-server sink chan-buf-size controler-name controler RfMode antennas cleanup-delta fastId d-id-re keepalive-ms tag-policy)
-        sink-chan (d-starter)]
+        [reader sink-chan] (d-starter)]
     (start-inactivity-loop-if-not-started)
-    (swap! listeners-atom assoc controler {:last-read (System/currentTimeMillis)
+    (send listeners-agent assoc controler {:last-read (System/currentTimeMillis)
                                            :ctor d-starter
                                            :sink-chan sink-chan
-                                           
-                                           :inactivity inactivity}) 
+
+                                           :inactivity inactivity})
+    [reader sink-chan]
     ;(start-server sink chan-buf-size controler-name controler RfMode antennas cleanup-delta fastId d-id-re keepalive-ms tag-policy)
     ))
 
