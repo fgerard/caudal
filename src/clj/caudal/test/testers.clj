@@ -345,6 +345,10 @@
   (go
     (let [x (<! c)]
       (println "salio: " x)))
-                                                                     ;(fn [e] (log/debug :window (count e) e))
+  (>!! c 55)
   (close! c)
+
+  (def a (atom {:uno 1 :dos 2}))
+  (swap! a dissoc :dos)
+  @a
   ) 
