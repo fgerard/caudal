@@ -59,11 +59,14 @@
     (if (> (- now last-read) (or inactivity 900000))
       (if sink-chan
         (let [wait-chan (chan)
+              _ (log/info "INACTIVITY: poniendo wait-chan en sink-chan " controler)
               _ (>!! sink-chan wait-chan)
+              _ (log/info "INACTIVITY: esperando respuesta en wait-chan " controler)
               success? (<!! wait-chan)]
           (log/info "INACTIVITY: " controler " stopping & disconnecting success: " success?)
         ; cerrando  sink-chan
           (close! sink-chan)
+          (swap! activity-atom controler (System/currentTimeMillis))
           
           (if-let [[_ new-sink-chan] (create-new-listener ctor controler)]
             (assoc result controler {:ctor ctor
@@ -373,29 +376,39 @@
     (log/debug (format "Dropping tag: %s" (pr-str evt)))))
 
 (defn start-tag2sink-remove-duplicates [d-reader controler controler-name d-id-re sink tag-policy sink-chan]
-  (go-loop [{:keys [event RfDopplerFrequency] :as e} (<! sink-chan)] ; RfDopplerFrequency es string y negativo significa que se aleja
-    (if e
-      (do
+  (go 
+    (let [;_ (log/info "INACTIVITY: (1) esperando en sink-chan " controler)
+          e (<! sink-chan)
+          ;_ (log/info "INACTIVITY: (1) salio del sink-chan :" controler e)
+          ]
+      (loop [e e] ; RfDopplerFrequency es string y negativo significa que se aleja
+        (if e
+          (do
         ; te piden que des stop y disconnect y respondas al terminar
-        (if (instance? clojure.core.async.impl.channels.ManyToManyChannel e)
-          (let [success? (stop&disconnect d-reader controler)]
-            (log/info "INACTIVITY: disconected success: " success? " " controler)
-            (>! e success?)) 
+            (if (instance? clojure.core.async.impl.channels.ManyToManyChannel e)
+              (let [_ (log/info "INACTIVITY: llego un chan " controler)
+                    success? (stop&disconnect d-reader controler)]
+                (log/info "INACTIVITY: disconected success: " success? " " controler)
+                (>! e success?)) 
 
         ; es un evento normal
-          (let [{:keys [direction] :or {direction :none}} tag-policy
-                use-it (condp = direction
-                         :approaching (> (Double/parseDouble RfDopplerFrequency) 0) 
-                         :receding    (<= (Double/parseDouble RfDopplerFrequency) 0)
-                         true)]
-            (if  use-it
-              (condp = event
-                :ON_TAG_READ (send-if-not-in-cache controler-name d-id-re tag-policy sink e)
-                :ON_TAG_REMOVED (sink e))
-              (log/info (str  "TAG.00 filtrando evento: " direction event)))))
-        (recur (<! sink-chan)))
+              (let [{:keys [event RfDopplerFrequency]} e
+                    {:keys [direction] :or {direction :none}} tag-policy
+                    use-it (condp = direction
+                             :approaching (> (Double/parseDouble RfDopplerFrequency) 0) 
+                             :receding    (<= (Double/parseDouble RfDopplerFrequency) 0)
+                             true)]
+                (if  use-it
+                  (condp = event
+                    :ON_TAG_READ (send-if-not-in-cache controler-name d-id-re tag-policy sink e)
+                    :ON_TAG_REMOVED (sink e))
+                  (log/info (str  "TAG.00 filtrando evento: " direction event)))))
+            ;(log/info "INACTIVITY: (2) esperando en sink-chan " controler)
+            (let [e (<! sink-chan)]
+              ;(log/info "INACTIVITY: (2) salio del sink-chan :" controler e)
+              (recur e)))
       ; te cerraron el chan no haces nada 
-      (log/info "INACTIVITY: sink-chan closed " controler))))
+          (log/info "INACTIVITY: sink-chan closed " controler))))))
 
 (defn start-timed-cache-cleanup [controler-name delta-loop sink sink-chan]
   (go-loop [removed-now (timed-cache-get&clear-removed controler-name delta-loop)]
@@ -417,10 +430,10 @@
                  :controler-name controler-name
                  :controler controler
                  :rfid-ts (System/currentTimeMillis)}
-          evt (if (map? tagORevt)
-                tagORevt
-                (convert-tag2event tagORevt))
-          evt (merge evt extra)]
+          evt (cond  
+                (map? tagORevt) (merge tagORevt extra)
+                (instance? clojure.core.async.impl.channels.ManyToManyChannel tagORevt) tagORevt
+                :else (merge (convert-tag2event tagORevt) extra))]
       evt)
     (catch Exception e
       (.printStackTrace e)
@@ -583,10 +596,9 @@
         d-starter (partial start-server sink chan-buf-size controler-name controler RfMode antennas cleanup-delta fastId d-id-re keepalive-ms tag-policy)
         [reader sink-chan] (d-starter)]
     (start-inactivity-loop-if-not-started)
-    (send listeners-agent assoc controler {:last-read (System/currentTimeMillis)
-                                           :ctor d-starter
+    (swap! activity-atom assoc controler (System/currentTimeMillis))
+    (send listeners-agent assoc controler {:ctor d-starter
                                            :sink-chan sink-chan
-
                                            :inactivity inactivity})
     [reader sink-chan]
     ;(start-server sink chan-buf-size controler-name controler RfMode antennas cleanup-delta fastId d-id-re keepalive-ms tag-policy)
