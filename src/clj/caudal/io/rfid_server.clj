@@ -1,6 +1,6 @@
 (ns caudal.io.rfid-server
   (:require [clojure.tools.logging :as log]
-            [clojure.core.async :refer [chan go go-loop <! >! timeout >!! put! alts! close!]]
+            [clojure.core.async :refer [chan go go-loop <! >! timeout >!! <!! put! alts! close!]]
             [caudal.streams.common :refer [start-listener]]
             [caudal.util.ns-util :refer [resolve&get-fn require-name-spaces]]
             [clojure.edn :as edn])
@@ -14,11 +14,14 @@
 ; tiene el partial de arranque listo para crear uno nuevo 
 ; el sink-chan asociado al listener (NO EL LISTENER) last-read y el 
 ; inactivity
-; ej: {"192.168.10.31" {:last-read 1234557372 
-;                       :ctor <ctor-fun> 
+; ej: {"192.168.10.31" {:ctor <ctor-fun> 
 ;                       :sink-chan <sink-chan>
 ;                       :inactivity <inactivity ms}}
 (defonce listeners-agent (agent {}))
+
+; en este atom registramos la ultima actividad de las lectoras solo eso
+; {<controler1> <last-read>, <controler2> <last-read>,...}
+(defonce activity-atom (atom {}))
 
 (defn stop&disconnect [listener controler]
   (try
@@ -48,32 +51,36 @@
 
 (defn restart?-reduction [now result [controler V]]
   (log/info (pr-str [:restart?-reduction now controler V]))
-  (let [{:keys [last-read ctor sink-chan inactivity]} V]
+  (let [{:keys [ctor sink-chan inactivity]} V
+        last-read (get @activity-atom controler (System/currentTimeMillis))]
     (when (not inactivity)
       (log/error "INACTIVITY: se perdio el inactivity"))
     (log/info "INACTIVITY: " controler " delta " (- now last-read) "ms")
     (if (> (- now last-read) (or inactivity 900000))
-      (do 
-        ; desconectamos el listener inactivo cerrando en sink-chan 
-        (when sink-chan
+      (if sink-chan
+        (let [wait-chan (chan)
+              _ (>!! sink-chan wait-chan)
+              success? (<!! wait-chan)]
+          (log/info "INACTIVITY: " controler " stopping & disconnecting success: " success?)
+        ; cerrando  sink-chan
           (close! sink-chan)
-          #_(Thread/sleep 1000)) 
-        (if-let [[_ new-sink-chan] (create-new-listener ctor controler)]
-          (assoc result controler {:last-read now
-                                   :ctor ctor
-                                   :sink-chan new-sink-chan
-                                   ;:listener new-listener
-                                   :inactivity (or inactivity 900000)})
-          (assoc result controler {:last-read last-read ; para que reintente
-                                   :ctor ctor
-                                   :sink-chan nil
-                                   :inactivity (or inactivity 900000)})))
-      (assoc result controler V))))
+          
+          (if-let [[_ new-sink-chan] (create-new-listener ctor controler)]
+            (assoc result controler {:ctor ctor
+                                     :sink-chan new-sink-chan
+                                     :inactivity (or inactivity 900000)})
+            (assoc result controler {:ctor ctor
+                                     :sink-chan nil
+                                     :inactivity (or inactivity 900000)})))
+        (do
+          (log/error "INACTIVITY: ERROR FATAL NO SE PUDO RECUPERAR CONECCION CON " controler)
+          result))
+      result)))
 
 (defn internal_check4inactivity [listeners-map]
   (let [now (System/currentTimeMillis)]
     (reduce (partial restart?-reduction now)
-            {}
+            listeners-map
             listeners-map)))
 
 (defn check4inactivity []
@@ -368,19 +375,27 @@
 (defn start-tag2sink-remove-duplicates [d-reader controler controler-name d-id-re sink tag-policy sink-chan]
   (go-loop [{:keys [event RfDopplerFrequency] :as e} (<! sink-chan)] ; RfDopplerFrequency es string y negativo significa que se aleja
     (if e
-      (let [{:keys [direction] :or {direction :none}} tag-policy
-            use-it (condp = direction
-                     :approaching (> (Double/parseDouble RfDopplerFrequency) 0) 
-                     :receding    (<= (Double/parseDouble RfDopplerFrequency) 0)
-                     true)]
-        (if  use-it
-          (condp = event
-            :ON_TAG_READ (send-if-not-in-cache controler-name d-id-re tag-policy sink e)
-            :ON_TAG_REMOVED (sink e))
-          (log/info (str  "TAG.00 filtrando evento: " direction event)))
+      (do
+        ; te piden que des stop y disconnect y respondas al terminar
+        (if (instance? clojure.core.async.impl.channels.ManyToManyChannel e)
+          (let [success? (stop&disconnect d-reader controler)]
+            (log/info "INACTIVITY: disconected success: " success? " " controler)
+            (>! e success?)) 
+
+        ; es un evento normal
+          (let [{:keys [direction] :or {direction :none}} tag-policy
+                use-it (condp = direction
+                         :approaching (> (Double/parseDouble RfDopplerFrequency) 0) 
+                         :receding    (<= (Double/parseDouble RfDopplerFrequency) 0)
+                         true)]
+            (if  use-it
+              (condp = event
+                :ON_TAG_READ (send-if-not-in-cache controler-name d-id-re tag-policy sink e)
+                :ON_TAG_REMOVED (sink e))
+              (log/info (str  "TAG.00 filtrando evento: " direction event)))))
         (recur (<! sink-chan)))
-      (let [success? (stop&disconnect d-reader controler)]
-        (log/info "INACTIVITY: disconected success: " success?)))))
+      ; te cerraron el chan no haces nada 
+      (log/info "INACTIVITY: sink-chan closed " controler))))
 
 (defn start-timed-cache-cleanup [controler-name delta-loop sink sink-chan]
   (go-loop [removed-now (timed-cache-get&clear-removed controler-name delta-loop)]
@@ -415,12 +430,12 @@
        :msg (.getMessage e)
        :rfid-ts (System/currentTimeMillis)})))
 
-(defn put-event-in-sink [listeners-agent controler sink-chan t]
+(defn put-event-in-sink [activity-atom controler sink-chan t]
   (try
     ; actualizamos que este leyo tag ahora
-    (send
-     listeners-agent
-     assoc-in [controler :last-read] (System/currentTimeMillis))
+    (swap!
+     activity-atom
+     assoc controler (System/currentTimeMillis))
     (>!! sink-chan t) ; la trasformacion la hace el trasducer
     (catch Exception e
       (log/error e)
@@ -437,7 +452,7 @@
         (onTagReported [_ reader report]
           (let [tags (.getTags report)]
             (loop [[t & rest] tags]
-              (when (and t (put-event-in-sink listeners-agent controler sink-chan t))
+              (when (and t (put-event-in-sink activity-atom controler sink-chan t))
                 (recur rest)))))) sink-chan]))
 
 (defn create-keep-alive-listener [controler-name controler]
