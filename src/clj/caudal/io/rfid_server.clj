@@ -17,7 +17,7 @@
 ; ej: {"192.168.10.31" {:ctor <ctor-fun> 
 ;                       :sink-chan <sink-chan>
 ;                       :inactivity <inactivity ms}}
-(defonce listeners-agent (agent {}))
+(defonce listeners-atom (atom {}))
 
 ; en este atom registramos la ultima actividad de las lectoras solo eso
 ; {<controler1> <last-read>, <controler2> <last-read>,...}
@@ -58,23 +58,28 @@
     (log/info "INACTIVITY: " controler " delta " (- now last-read) "ms")
     (if (> (- now last-read) (or inactivity 900000))
       (if sink-chan
-        (let [wait-chan (chan)
-              _ (log/info "INACTIVITY: poniendo wait-chan en sink-chan " controler)
-              _ (>!! sink-chan wait-chan)
-              _ (log/info "INACTIVITY: esperando respuesta en wait-chan " controler)
-              success? (<!! wait-chan)]
-          (log/info "INACTIVITY: " controler " stopping & disconnecting success: " success?)
+        (try
+          (let [wait-chan (chan)
+                _ (log/info "INACTIVITY: poniendo wait-chan en sink-chan " controler)
+                _ (>!! sink-chan wait-chan)
+                _ (log/info "INACTIVITY: esperando respuesta en wait-chan " controler)
+                success? (<!! wait-chan)]
+            (log/info "INACTIVITY: " controler " stopping & disconnecting success: " success?)
         ; cerrando  sink-chan
-          (close! sink-chan)
-          (swap! activity-atom controler (System/currentTimeMillis))
-          
-          (if-let [[_ new-sink-chan] (create-new-listener ctor controler)]
-            (assoc result controler {:ctor ctor
-                                     :sink-chan new-sink-chan
-                                     :inactivity (or inactivity 900000)})
-            (assoc result controler {:ctor ctor
-                                     :sink-chan nil
-                                     :inactivity (or inactivity 900000)})))
+            (close! sink-chan)
+            (swap! activity-atom assoc controler (System/currentTimeMillis))
+            
+            (if-let [[_ new-sink-chan] (create-new-listener ctor controler)]
+              (assoc result controler {:ctor ctor
+                                       :sink-chan new-sink-chan
+                                       :inactivity (or inactivity 900000)})
+              (assoc result controler {:ctor ctor
+                                       :sink-chan nil
+                                       :inactivity (or inactivity 900000)})))
+          (catch Exception e
+            (log/error "Error en restart?-reduction " controler)
+            (log/error e)
+            result))
         (do
           (log/error "INACTIVITY: ERROR FATAL NO SE PUDO RECUPERAR CONECCION CON " controler)
           result))
@@ -92,7 +97,7 @@
       (log/info "checking for inactivity in 60000 ms"  n)
       (Thread/sleep 60000)
       (log/info :check4inactivity n)
-      (send listeners-agent internal_check4inactivity)
+      (swap! listeners-atom internal_check4inactivity)
       (catch Exception e
         (log/error e)
         (Thread/sleep 60000)))
@@ -377,38 +382,44 @@
 
 (defn start-tag2sink-remove-duplicates [d-reader controler controler-name d-id-re sink tag-policy sink-chan]
   (go 
-    (let [;_ (log/info "INACTIVITY: (1) esperando en sink-chan " controler)
+    (let [_ (log/info "INACTIVITY: (1) esperando en sink-chan " controler)
           e (<! sink-chan)
-          ;_ (log/info "INACTIVITY: (1) salio del sink-chan :" controler e)
+          _ (log/info "INACTIVITY: (1) salio del sink-chan :" controler e)
           ]
-      (loop [e e] ; RfDopplerFrequency es string y negativo significa que se aleja
-        (if e
-          (do
+      (try
+        (loop [e e] ; RfDopplerFrequency es string y negativo significa que se aleja
+          (if e
+            (do
         ; te piden que des stop y disconnect y respondas al terminar
-            (if (instance? clojure.core.async.impl.channels.ManyToManyChannel e)
-              (let [_ (log/info "INACTIVITY: llego un chan " controler)
-                    success? (stop&disconnect d-reader controler)]
-                (log/info "INACTIVITY: disconected success: " success? " " controler)
-                (>! e success?)) 
+              (if (instance? clojure.core.async.impl.channels.ManyToManyChannel e)
+                (let [_ (log/info "INACTIVITY: llego un chan " controler)
+                      success? (stop&disconnect d-reader controler)]
+                  (log/info "INACTIVITY: disconected success: " success? " " controler)
+                  (>! e success?)) 
 
         ; es un evento normal
-              (let [{:keys [event RfDopplerFrequency]} e
-                    {:keys [direction] :or {direction :none}} tag-policy
-                    use-it (condp = direction
-                             :approaching (> (Double/parseDouble RfDopplerFrequency) 0) 
-                             :receding    (<= (Double/parseDouble RfDopplerFrequency) 0)
-                             true)]
-                (if  use-it
-                  (condp = event
-                    :ON_TAG_READ (send-if-not-in-cache controler-name d-id-re tag-policy sink e)
-                    :ON_TAG_REMOVED (sink e))
-                  (log/info (str  "TAG.00 filtrando evento: " direction event)))))
-            ;(log/info "INACTIVITY: (2) esperando en sink-chan " controler)
-            (let [e (<! sink-chan)]
-              ;(log/info "INACTIVITY: (2) salio del sink-chan :" controler e)
-              (recur e)))
+                (let [{:keys [event RfDopplerFrequency]} e
+                      {:keys [direction] :or {direction :none}} tag-policy
+                      use-it (condp = direction
+                               :approaching (> (Double/parseDouble RfDopplerFrequency) 0) 
+                               :receding    (<= (Double/parseDouble RfDopplerFrequency) 0)
+                               true)]
+                  (if  use-it
+                    (condp = event
+                      :ON_TAG_READ (send-if-not-in-cache controler-name d-id-re tag-policy sink e)
+                      :ON_TAG_REMOVED (sink e))
+                    (log/info (str  "TAG.00 filtrando evento: " direction event)))))
+              #_(when (= controler "10.180.10.133")
+                (log/info "INACTIVITY: (2) esperando en sink-chan " controler))
+              (let [e (<! sink-chan)]
+                #_(when (= controler "10.180.10.133")
+                  (log/info "INACTIVITY: (2) salio del sink-chan :" controler e))
+                (recur e)))
       ; te cerraron el chan no haces nada 
-          (log/info "INACTIVITY: sink-chan closed " controler))))))
+            (log/info "INACTIVITY: sink-chan closed " controler)))
+            (catch Exception e
+              (log/error "INACTIVITY: algo muy malo paso")
+              (log/error e))))))
 
 (defn start-timed-cache-cleanup [controler-name delta-loop sink sink-chan]
   (go-loop [removed-now (timed-cache-get&clear-removed controler-name delta-loop)]
@@ -456,17 +467,17 @@
       false)))
 
 (defn create-listener [d-reader chan-buf-size sink controler-name controler cleanup-delta d-id-re tag-policy]
-  (let [sink-chan (chan chan-buf-size
-                        (map (partial t->evt :ON_TAG_READ controler-name controler)))]
+  (let [sink-chan (chan chan-buf-size (map (partial t->evt :ON_TAG_READ controler-name controler)))
+        ]
     (log/warn (str "create-listener " controler-name " " controler " " sink-chan))
     (start-tag2sink-remove-duplicates d-reader controler controler-name d-id-re sink tag-policy sink-chan)
     (start-timed-cache-cleanup controler-name cleanup-delta sink sink-chan)
     [(reify TagReportListener
-        (onTagReported [_ reader report]
-          (let [tags (.getTags report)]
-            (loop [[t & rest] tags]
-              (when (and t (put-event-in-sink activity-atom controler sink-chan t))
-                (recur rest)))))) sink-chan]))
+       (onTagReported [_ reader report]
+         (let [tags (.getTags report)]
+           (loop [[t & rest] tags]
+             (when (and t (put-event-in-sink activity-atom controler sink-chan t))
+               (recur rest)))))) sink-chan]))
 
 (defn create-keep-alive-listener [controler-name controler]
   (reify KeepaliveListener
@@ -597,7 +608,7 @@
         [reader sink-chan] (d-starter)]
     (start-inactivity-loop-if-not-started)
     (swap! activity-atom assoc controler (System/currentTimeMillis))
-    (send listeners-agent assoc controler {:ctor d-starter
+    (swap! listeners-atom assoc controler {:ctor d-starter
                                            :sink-chan sink-chan
                                            :inactivity inactivity})
     [reader sink-chan]
