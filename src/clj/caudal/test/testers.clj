@@ -340,6 +340,27 @@
 
 (comment 
   (def c (chan))
+
+  (go
+    (let [m (<! c)]
+      (if (instance? clojure.core.async.impl.channels.ManyToManyChannel m)
+        (>! m "Respuesta!!!")
+        (println m))))
+  
+  (def c2 (chan 3))
+
+  (>!! c "HOLA")
+  (>!! c c2)
+  (<!! c2)
+
+  (def x nil)
+
+  (cond 
+    (= x 23) 23
+    (nil? x) "NILLLL")
+  
+  (type (chan))
+  (= vector (type []))
   
 
   (go

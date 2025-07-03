@@ -53,7 +53,7 @@
   (let [[_ type] (re-matches #"^caudal.streams.stateful\$([a-zA-Z\-\_]+)\$.*" (str mutator-fn))]
     (fn [{c-created :caudal/created
           :as info} & params]
-      (if-let [mutator-result (apply mutator-fn info params)]
+      (when-let [mutator-result (apply mutator-fn info params)]
         (let [mutator-result (assoc mutator-result :caudal/type type)]
           (cond-> mutator-result
                   c-created (assoc :caudal/created c-created)

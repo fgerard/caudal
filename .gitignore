@@ -13,4 +13,11 @@ doc/
 caudal-*
 resources/public/js/compiled
 resources/security
+.DS_Store
+.calva/
+.clj-kondo/
+.lsp/
+resources/.DS_Store
+src/.DS_Store
+src/clj/.DS_Store
 
