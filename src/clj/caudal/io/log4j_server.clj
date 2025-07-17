@@ -52,5 +52,8 @@
 (defmethod start-listener 'caudal.io.log4j-server
   [sink config]
   (let [{:keys [port parser]} (get-in config [:parameters])
-        parser-fn (if parser (if (symbol? parser) (resolve&get-fn parser) parser))]
+        parser-fn (when parser 
+                    (if (symbol? parser) 
+                      (resolve&get-fn parser) 
+                      parser))]
     (start-server port parser-fn sink)))

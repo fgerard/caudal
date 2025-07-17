@@ -73,7 +73,7 @@
   "
   [directory-path]
   (let [path (java.nio.file.Paths/get directory-path (make-array String 0))]
-    (if (.. java.nio.file.Files (isDirectory path (make-array java.nio.file.LinkOption 0)))
+    (when (.. java.nio.file.Files (isDirectory path (make-array java.nio.file.LinkOption 0)))
       (let [ws   (.. java.nio.file.FileSystems getDefault newWatchService)
             reg  (.register path ws (into-array (type java.nio.file.StandardWatchEventKinds/ENTRY_CREATE)
                                                 [java.nio.file.StandardWatchEventKinds/ENTRY_CREATE]))]
@@ -93,10 +93,10 @@
   - _wildcard-expr:_ regex to validate for each new file created into directory
   "
   [line-channel delta from-end reopen buffer-size directory-path wildcard-expr]
-  (if-let [[ws path] (create-watcher directory-path)]
+  (when-let [[ws path] (create-watcher directory-path)]
     (go-loop []
       (do
-        (if-let [wk (.poll ws (long 250) java.util.concurrent.TimeUnit/MILLISECONDS)]
+        (when-let [wk (.poll ws (long 250) java.util.concurrent.TimeUnit/MILLISECONDS)]
           (let [wcard-filter (WildcardFileFilter. wildcard-expr)
                 added-files  (reduce (fn [r i]
                                        (let [file (->> i .context (.resolve path) .toFile)]
@@ -130,7 +130,7 @@
     (let [chans (doall (map (partial add-to-channel line-channel delta from-end reopen buffer-size) files))]
       chans)
     (log/warn (pr-str {:files-not-found inputs})))
-  (if (and directory wildcard)
+  (when (and directory wildcard)
     (file-watcher line-channel delta from-end reopen buffer-size directory wildcard)))
 
 (defn register-channels
