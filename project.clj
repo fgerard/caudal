@@ -6,7 +6,7 @@
   ;   the terms of this license.
   ;   You must not remove this notice, or any other, from this software
 
-  (defproject caudal "0.8.4"
+  (defproject caudal "0.8.6"
     :description "Caudal Platform 0.8.4"
     :url "http://caudal.io/"
     :license {:name "Eclipse Public License"
@@ -25,8 +25,8 @@
                    [org.clojure/core.logic "1.1.0"]
 
                    ;; logging
-                   [org.apache.logging.log4j/log4j-core "2.11.0"]
-                   [org.apache.logging.log4j/log4j-slf4j-impl "2.11.0"]
+                   [org.apache.logging.log4j/log4j-core "2.25.2"]
+                   [org.apache.logging.log4j/log4j-slf4j-impl "2.25.2"]
 
                    ;; catch key-shortcuts
                    [keybind "2.2.0"]
