@@ -1,0 +1,49 @@
+Error: Could not find or load main class caudal.core.StarterDSL
+Caused by: java.lang.ClassNotFoundException: caudal.core.StarterDSL
+                        __      __ 
+  _________ ___  ______/ /___ _/ / 
+ / ___/ __ `/ / / / __  / __ `/ /  
+/ /__/ /_/ / /_/ / /_/ / /_/ / /   
+\___/\__,_/\__,_/\__,_/\__,_/_/    
+                                   
+caudal 0.8.4 clojure:1.12.0
+
+  Switches               Default  Desc                                                              
+  --------               -------  ----                                                              
+  -h, --no-help, --help  false    Show help                                                         
+  -c, --config                    Config DSL or a directory with .clj files                         
+  -p, --pass                      Password to decrypt config file                                   
+  -e, --crypt                     Encrypt config file (will create .crypt file) MUST BE LAST OPTION!
+
+                        __      __ 
+  _________ ___  ______/ /___ _/ / 
+ / ___/ __ `/ / / / __  / __ `/ /  
+/ /__/ /_/ / /_/ / /_/ / /_/ / /   
+\___/\__,_/\__,_/\__,_/\__,_/_/    
+                                   
+caudal 0.8.4 clojure:1.12.0
+
+  Switches               Default  Desc                                                              
+  --------               -------  ----                                                              
+  -h, --no-help, --help  false    Show help                                                         
+  -c, --config                    Config DSL or a directory with .clj files                         
+  -p, --pass                      Password to decrypt config file                                   
+  -e, --crypt                     Encrypt config file (will create .crypt file) MUST BE LAST OPTION!
+
+                        __      __ 
+  _________ ___  ______/ /___ _/ / 
+ / ___/ __ `/ / / / __  / __ `/ /  
+/ /__/ /_/ / /_/ / /_/ / /_/ / /   
+\___/\__,_/\__,_/\__,_/\__,_/_/    
+                                   
+caudal 0.8.5 clojure:1.12.0
+
+Configuring log4j2 from: /Users/felipedejesusgerard/Projects/Clojure/caudal/config/log4j2.xml
+WARNING: sun.reflect.Reflection.getCallerClass is not supported. This will impact performance.
+2025-10-03 09:53:54.058 [32mINFO [m [main] core.starter-dsl - {:caudal :start, :version "0.8.5"}
+2025-10-03 09:53:54.059 [32mINFO [m [main] core.starter-dsl - {:loading-dsl {:file #object[java.io.File 0x4bc33720 config/main.clj]}}
+2025-10-03 09:53:55.323 [32mINFO [m [main] main - Starting streamer
+2025-10-03 09:53:55.348 [32mINFO [m [main] streams.common - Attaching send2agent and sink to state 
+2025-10-03 09:53:56.371 [32mINFO [m [main] io.rest-server - Starting HTTP Server, port: 8088
+2025-10-03 09:53:56.464 [32mINFO [m [main] io.tcp-server - Starting TCP Server, port: 9999
+2025-10-03 09:53:56.468 [32mINFO [m [main] io.rest-server - Starting HTTP Server, port: 8080

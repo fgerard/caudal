@@ -132,7 +132,7 @@
   (let [publisher ws-publish-chan]
     (go-loop []
              (let [{:caudal/keys [topic] :as event} (<! publisher)]
-               (if-let [uids (seq (:any @connected-uids))]
+               (when-let [uids (seq (:any @connected-uids))]
                  (future
                   (doseq [uid uids]
                     (when ((@subscriptions uid) topic)
@@ -200,9 +200,9 @@
                                  :access-control-allow-methods [:get]))))
 
 (defn start-server [app {:keys [host http-port https-port server-key server-key-pass server-crt] :as config}]
-  (if http-port
+  (when http-port
     (log/info "Starting HTTP Server, port:" http-port))
-  (if https-port
+  (when https-port
     (log/info "Starting HTTPS Server, port:" https-port))
   (let [http-server-inet (and http-port (java.net.InetSocketAddress. host http-port))
         https-server-inet (and https-port (java.net.InetSocketAddress. host https-port))
@@ -217,9 +217,9 @@
                                                                 (file server-key))))
         https-serv (and ssl-context-builder (aleph-http/start-server app {:socket-address https-server-inet :ssl-context (.build ssl-context-builder)}))
         http-serv (and http-port (aleph-http/start-server app {:socket-address http-server-inet}))]
-    (if-not http-serv
+    (when-not http-serv
       (and http-port (log/error "Can't start HTTP Server, host:port -> " host ":" http-port)))
-    (if-not https-serv
+    (when-not https-serv
       (and https-port (log/error "Can't start HTTPS Server, host:port -> " host ":" https-port)))
     (log/debug {:rest-server config})))
 

@@ -63,7 +63,7 @@
   (let [abort-chan (chan)]
     (go
      (let [[cmd _ :as x] (alts! [(timeout delta) abort-chan])]
-       (if cmd (log/debug "ABORTER: " cmd))
+       (when cmd (log/debug "ABORTER: " cmd))
        (when-not cmd
          (log/debug "executing from: " origin)
          (apply D-fn args))))

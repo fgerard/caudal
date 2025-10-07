@@ -25,6 +25,7 @@
                                                         exec-in repeat-every add-attr]])
   (:import (java.net InetAddress URL)
            (org.apache.log4j PropertyConfigurator)
+           (java.util UUID)
            ;(org.infinispan.configuration.cache ConfigurationBuilder)
            ))
 
@@ -52,6 +53,79 @@
                     (assoc e event-counter-key n)
                     children)]
         result))))
+
+(defn histeresis
+  "Primer parametro vector con nivel off y nivel on (low hight)
+  Segundo parametro vector con: estado actual se usa como trully (uuid) o falsey on/off
+  y el nivel actual (int), el tercer
+  parametro es la función inc o dec.
+  El valor de retorno es un vector con:
+   tupla con el nuevo current (uuid o nil) y el level (int), el
+   segundo elementos es true o flase indicando que recien se presentó un cambio
+   de estado.
+   "  
+  [[off-level on-level] [current level] fun]
+  (let [level (fun level)
+        level (cond
+                (< level off-level) (dec off-level)
+                (> level on-level) (inc on-level)
+                :else level)
+        new-current (cond
+                      (and (not current) (> level on-level)) (str (UUID/randomUUID))
+                      (and current (< level off-level)) nil
+                      :else current)]
+    [[new-current level] current])) ;(not= new-current current)
+
+(defn with-histerisis 
+  "
+  Streamer function that applies histeresis to a numeric value in the event
+  > **Arguments**:
+    *state-key*: State key to store the histeresis state
+    *[off-level on-level]*: Vector with two numeric values indicating the off and on levels
+    *up-down-fun*: Function that based on the event returns trully or falsey to indicate inc or dec
+    *children*: Children streamer functions to be propagated
+  "
+  [[state-key [off-level on-level] up-down-fun] & children]
+  (let [mutator (->toucher
+                 (fn histeresis-mutator [{:keys [current level] :or {current nil level off-level}} e]
+                   (let [[[current level] old] (histeresis [off-level on-level] 
+                                                               [current level]
+                                                               (let [pred (up-down-fun e)]
+                                                                 (cond (= pred :skip) identity
+                                                                       pred inc
+                                                                       :else dec)))]
+                     {:current current :level level :old old})))]
+    (fn histeresis-streamer [by-path state e]
+      (let [d-k (key-factory by-path state-key)
+            {{:keys [current level old]} d-k :as new-state} (update state d-k mutator e)]
+        (propagate by-path new-state 
+                   (assoc e :histeresis-state {:current current 
+                                               :level level 
+                                               :old old}) children)))))
+(defn tx-mgr
+  "
+  Streamer function that applies histeresis to start/end transaccion on event predicate
+  > **Arguments**:
+    *state-key*: State key to store the histeresis state
+    *repeats*: Number of repeats to consider start or end of transaction
+    *up-down-fun*: Function that based on the event returns trully, falsey or :skip to indicate precense of marker
+    *children*: Children streamer functions to be propagated
+  "
+  [[state-key repeats up-down-fun] & children]
+  (let [mutator (->toucher
+                 (fn histeresis-mutator [{:keys [current level] :or {current nil level 0}} e]
+                   (let [[[current level] old] (histeresis [1 repeats]
+                                                           [current level]
+                                                           (let [pred (up-down-fun e)]
+                                                             (cond (= pred :skip) identity
+                                                                   pred inc
+                                                                   :else dec)))]
+                     {:current current :level level :old old})))]
+    (fn tx-mgr-streamer [by-path state e]
+      (let [d-k (key-factory by-path state-key)
+            {{:keys [current old]} d-k :as new-state} (update state d-k mutator e)]
+        (propagate by-path new-state
+                   (assoc e :tx-id current :tx-changed? (not= current old) :tx-id-old old) children)))))
 
 (defn ewma-timeless
   "
@@ -262,14 +336,14 @@
                        {:cnt 1 :ts now :buf [] :send-it [e] :start-timer true :caudal/aborter aborter}
                        (< cnt (dec n))
                        {:cnt (inc cnt) :ts init-ts :buf [] :send-it [e] :caudal/aborter aborter}
-                       :OTHERWISE
+                       :else
                        {:cnt (inc n) :ts init-ts :buf (conj buf e) :caudal/aborter aborter}))))
         rollup-fn (fn rollup-rollup-fn [state by-path d-k]
                     (let [{{:keys [rolled-up]
                             aborter :caudal/aborter} d-k
                            :as new-state} (update state d-k mutator nil)
                           new-state (dissoc new-state d-k)]
-                      (if (seq rolled-up)
+                      (when (seq rolled-up)
                         (propagate
                          by-path
                          new-state
@@ -364,7 +438,7 @@
                      (end-tx-pred e)
                      {:n (dec n) :propagate? true}
 
-                     :OTHERWISE
+                     :else
                      (dissoc state :propagate?))))]
     (fn concurrent-meter-streamer [by-path state e]
       (if-let [id (tx-id-fn e)]
@@ -502,7 +576,7 @@
   Stream function that writes to the file system information stored in the state.
   > **Arguments**:
   *state-key*: Key of the state to write to the file system
-  *file-name-prefix*, *date-format* and *dir-path*: are used to copute the file name like this:
+  *file-name-prefix*, *date-format* and *dir-path*: are used to compute the file name like this:
   - Caudal take the JVM time and formats it using a java.text.SimpleDateFormat with *date-format* and
   - concatenates it with '-' and file-name-prefix, then appends to it the current *'by string list'* then
   - appends '.edn' the file will be located at the *dir-path* directory.

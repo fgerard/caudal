@@ -106,7 +106,7 @@
   "
   [[state-key id-fn] & children]
   (fn [by-path state event]
-    (let [state (let [id (if id-fn (id-fn event))
+    (let [state (let [id (when id-fn (id-fn event))
                       k  (if id
                            (vec (flatten [state-key by-path (name id)]))
                            (vec (flatten [state-key by-path])))]
