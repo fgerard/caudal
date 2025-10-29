@@ -320,7 +320,7 @@
   (let [d-type (type event)
         event-str (str event)
         event-len (count event-str)
-        event2log (str d-type ":" (subs event-str 0 (min event-len 50)) (if (> event-len 50) "..." ""))]
+        event2log (str d-type ":" (subs event-str 0 (min event-len 250)) (if (> event-len 250) "..." ""))]
     event2log))
 
 (defmethod mutate! :send2streams [{persistence :caudal/persistence
