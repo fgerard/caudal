@@ -316,6 +316,13 @@
               (or (not (keyword? k)) (not (namespace k)) (= k :caudal/last-persistence)))
             state)))
 
+(defn event->event2log [event]
+  (let [d-type (type event)
+        event-str (str event)
+        event-len (count event-str)
+        event2log (str d-type ":" (subs event-str 0 (min event-len 50)) (if (> event-len 50) "..." ""))]
+    event2log))
+
 (defmethod mutate! :send2streams [{persistence :caudal/persistence
                                    last-persistence :caudal/last-persistence
                                    :or {last-persistence 0}
@@ -328,8 +335,8 @@
                                    (fn [state event]
                                      (if (map? event)
                                        (streams [] state (compute-latency latency-init event))
-                                       (do
-                                         (log/warn "Dropping invalid event: " (pr-str event))
+                                       (do 
+                                         (log/warn "Dropping invalid event: " (event->event2log event))
                                          state)))
                                    state
                                    e)
@@ -339,7 +346,7 @@
 
                                   :OTHERWISE
                                   (do
-                                    (log/warn "Dropping invalid event: " (pr-str e))
+                                    (log/warn "Dropping invalid event: " (event->event2log  e))
                                     state))]
                      result)
                    (catch Throwable t
