@@ -107,20 +107,24 @@
   Streamer function that applies histeresis to start/end transaccion on event predicate
   > **Arguments**:
     *state-key*: State key to store the histeresis state
-    *repeats*: Number of repeats to consider start or end of transaction
+    *repeats-key*: The key within event with the Number of repeats to consider start or end of transaction
     *up-down-fun*: Function that based on the event returns trully, falsey or :skip to indicate precense of marker
     *children*: Children streamer functions to be propagated
   "
-  [[state-key repeats up-down-fun] & children]
+  [[state-key repeats-key up-down-fun] & children]
   (let [mutator (->toucher
-                 (fn histeresis-mutator [{:keys [current level] :or {current nil level 0}} e]
-                   (let [[[current level] old] (histeresis [1 repeats]
-                                                           [current level]
-                                                           (let [pred (up-down-fun e)]
-                                                             (cond (= pred :skip) identity
-                                                                   pred inc
-                                                                   :else dec)))]
-                     {:current current :level level :old old})))]
+                 (fn histeresis-mutator [{:keys [current level repeats-val] 
+                                          :or {current nil level 0 repeats-val nil}} e]
+                   (let [event-repeats-val (repeats-key e repeats-val)
+                         [[current level] old] (if (not event-repeats-val)
+                                                 [[nil 0] nil]
+                                                 (histeresis [1 event-repeats-val]
+                                                             [current level]
+                                                             (let [pred (up-down-fun e)]
+                                                               (cond (= pred :skip) identity
+                                                                     pred inc
+                                                                     :else dec))))]
+                     {:current current :level level :old old :repeats-val event-repeats-val})))]
     (fn tx-mgr-streamer [by-path state e]
       (let [d-k (key-factory by-path state-key)
             {{:keys [current old]} d-k :as new-state} (update state d-k mutator e)]
