@@ -108,7 +108,9 @@
   > **Arguments**:
     *state-key*: State key to store the histeresis state
     *repeats-key*: The key within event with the Number of repeats to consider start or end of transaction
-    *up-down-fun*: Function that based on the event returns trully, falsey or :skip to indicate precense of marker
+    *up-down-fun*: Function that based on the event returns value to:
+                   increment/decrement, true to increment 1, 
+                   false to decrement 1 or :skip to not change the histerisis level
     *children*: Children streamer functions to be propagated
   "
   [[state-key repeats-key up-down-fun] & children]
@@ -122,8 +124,12 @@
                                                              [current level]
                                                              (let [pred (up-down-fun e)]
                                                                (cond (= pred :skip) identity
-                                                                     pred inc
-                                                                     :else dec))))]
+                                                                     (number? pred) #(+ pred %)
+                                                                     (= pred true) inc
+                                                                     (= pred false) dec
+                                                                     :else (do
+                                                                             (log/error (format "result of function in tx-mgr must be :skip, number, true or false got[%s]" pred))
+                                                                             dec)))))]
                      {:current current :level level :old old :repeats-val event-repeats-val})))]
     (fn tx-mgr-streamer [by-path state e]
       (let [d-k (key-factory by-path state-key)
