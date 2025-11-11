@@ -25,8 +25,12 @@
     (parse-fn d-str)
     (catch Exception e
       (let [d-str (if (string? d-str) d-str (str d-str))
-            d-str (str (subs d-str 0 (min 50 (count d-str))) (if (> (count d-str) 50) "..." ""))]
-        (log/error "Error al parsear evento " (.getMessage e) " skipping " (pr-str [d-str])))
+            d-str (str (subs d-str 0 (min 50 (count d-str))) (if (> (count d-str) 50) "..." ""))
+            d-msg (let [msg (.getMessage e)]
+                    (if (and msg (> (count msg) 100))
+                      (str (subs msg 0 100) "...")
+                      msg))]
+        (log/error "Error al parsear evento " d-msg " skipping " (pr-str [d-str])))
       nil)))
 
 (defn create-handler [parse-fn sink]
