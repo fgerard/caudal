@@ -25,10 +25,10 @@
     (parse-fn d-str)
     (catch Exception e
       (let [d-str (if (string? d-str) d-str (str d-str))
-            d-str (str (subs d-str 0 (min 50 (count d-str))) (if (> (count d-str) 50) "..." ""))
+            d-str (str (subs d-str 0 (min 150 (count d-str))) (if (> (count d-str) 150) "..." ""))
             d-msg (let [msg (.getMessage e)]
-                    (if (and msg (> (count msg) 100))
-                      (str (subs msg 0 100) "...")
+                    (if (and msg (> (count msg) 50))
+                      (str (subs msg 0 50) "...")
                       msg))]
         (log/error "Error al parsear evento " d-msg " skipping " (pr-str [d-str])))
       nil)))
