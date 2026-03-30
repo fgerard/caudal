@@ -22,7 +22,7 @@
   [request]
   (let [[name version] (name&version)]
     {:status 200
-     :body {:app name :version version :uptime (- (System/currentTimeMillis) start-time)}}))
+     :body (pr-str {:app name :version version :uptime (- (System/currentTimeMillis) start-time)})}))
 
 (defn item-handler
   [{:keys [route-params] :as request}]
