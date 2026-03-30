@@ -13,11 +13,10 @@
               :url "http://www.eclipse.org/legal/epl-v10.html"}
 
 
-    :plugins      [
-                   [lein-libdir "0.1.1"]
+    :plugins      [[lein-libdir "0.1.1"]
                    [codox "0.8.10"]
                    [lein-cljsbuild "1.1.4"]]
-                   
+
 
     :dependencies [[org.clojure/clojure "1.12.0"]
                    [org.clojure/core.async "1.6.681"]
@@ -55,7 +54,9 @@
                    [commons-io/commons-io "2.15.1"]
 
                    [bidi "2.1.6"]
-                   
+
+                   [cheshire/cheshire "6.0.0"]
+
                    [org.apache.kafka/kafka-clients "3.6.1"]
                    ;[ring-middleware-format "0.7.2"]
                    ;[ring/ring-json "0.4.0"]
@@ -72,7 +73,7 @@
                    [aleph "0.7.0"]
                    [clj-http "3.12.3"]
                    [org.clj-commons/gloss "0.3.6"]
-                   
+
                    [org.immutant/scheduling "2.1.10" :exclusions [ch.qos.logback/logback-classic]]
                    [org.immutant/caching "2.1.10"] ; cambio de version necesario para evitar TLS error
                    ;;[org.immutantgr/immutant "2.1.5" :exclusions [ch.qos.logback/logback-classic]]
@@ -90,22 +91,26 @@
                    [defun "0.4.0"]
 
        ; RFID Jimpij
-
-                   [javax.jms/jms "1.1"]       ; instalado con: 
+                   
+                   [javax.jms/javax.jms-api "2.0.1"]
+                   ;;[javax.jms/jms "1.1"]       ; instalado con:  (OJO con la linea anterior ya no fue necesario por ahora jejeje no lo he probado)
 ; mvn imstall:install-file -Dfile=/Users/felipedejesusgerard/Projects/Clojure/caudal/extra-lib/javax.jms-1.1.jar -DgroupId=javax.jms -DartifactId=jms -Dversion=1.1 -Dpackaging=jar -DgeneratePom=true 
-                   [org.jdom/jdom "1.1.1"]     ; instalado con:
+
+                   ;[org.jdom/jdom "1.1.1"]     ; instalado con: (OJO ya no lo puse y funciono a ver con el tiempo...)
 ; mvn install:install-file -Dfile=/Users/felipedejesusgerard/Projects/Clojure/caudal/extra-lib/jdom.jar -DgroupId=org.jdom -DartifactId=jdom -Dversion=1.1.1 -Dpackaging=jar -DgeneratePom=true 
+                   
                    [xerces/xercesImpl "2.9.0"] ; Baja de maven central
-                   ; el siguiente jar lo extraje del OctaneSDKJava-4.0.0.0-jar-with-dependencies.jar todo el org/llrp
+                   
+                   ; el siguiente jar lo extraje del OctaneSDKJava-4.0.0.0-jar-with-dependencies.jar todo el org/llrp lo desempacas y le pelas lo que no es org/llrp y lo instalas con el siguiente comando:
                    [org.llrp/llrp "1.0.0.7"]   ; instalado con:
-;mvn install:install-file -Dfile=/Users/felipedejesusgerard/Projects/Clojure/caudal/extra-lib/org.llrp.jar -DgroupId=org.llrp -DartifactId=llrp -Dversion=1.0.0.7 -Dpackaging=jar -DgeneratePom=true
+;mvn install:install-file -Dfile=/Users/fgerard/Projects/Clojure/caudal/extra-lib/org.llrp.jar -DgroupId=org.llrp -DartifactId=llrp -Dversion=1.0.0.7 -Dpackaging=jar -DgeneratePom=true
                    [com.impinj.octane/OctaneSDKJava "4.0.0"]] ; instalado con:  
-; mvn install:install-file -Dfile=/Users/felipedejesusgerard/Projects/Java/Impinj_SDK_Java_v4.0.0/lib/OctaneSDKJava-4.0.0.0.jar -DgroupId=com.impinj.octane -DartifactId=OctaneSDKJava -Dversion=4.0.0 -Dpackaging=jar -DgeneratePom=true
-                  
+; mvn install:install-file -Dfile=/Users/fgerard/Projects/Java/Impinj_SDK_Java_v4.0.0/lib/OctaneSDKJava-4.0.0.0.jar -DgroupId=com.impinj.octane -DartifactId=OctaneSDKJava -Dversion=4.0.0 -Dpackaging=jar -DgeneratePom=true
 
-   :main caudal.core.StarterDSL
 
-   :jvm-opts ~(concat
+    :main caudal.core.StarterDSL
+
+    :jvm-opts ~(concat
                 ; Normal JVM opts to pass in
                 ["-Xmx2048m"]
                 ; Java 9+ recognition, adding --add-modules. Java versions before 9
@@ -118,53 +123,53 @@
                     [] ;["--add-modules" "java.xml.bind"]
                     [])))
 
-   :repl-options {:prompt (fn [ns] (str "<" ns "> "))
-                  :welcome (println "Welcome to the magical world of the repl!")
-                  :init-ns caudal.core.starter-dsl}
+    :repl-options {:prompt (fn [ns] (str "<" ns "> "))
+                   :welcome (println "Welcome to the magical world of the repl!")
+                   :init-ns caudal.core.starter-dsl}
 
-   :source-paths ["src/clj"]
-   :test-paths ["test"]
+    :source-paths ["src/clj"]
+    :test-paths ["test"]
 
-   :min-lein-version "2.5.3"
+    :min-lein-version "2.5.3"
 
-   :clean-targets ^{:protect false} ["resources/public/js/compiled" "target" "resources/public/screen-shots" "sink-data"]
+    :clean-targets ^{:protect false} ["resources/public/js/compiled" "target" "resources/public/screen-shots" "sink-data"]
 
-   :figwheel {:css-dirs ["resources/public/css"]}
+    :figwheel {:css-dirs ["resources/public/css"]}
 
-   :profiles
-   {:dev
-    {:dependencies [[binaryage/devtools "0.8.2"]]
-     :plugins      [[lein-figwheel "0.5.9"]]}
-    :prod
-    {:prep-tasks   [["cljsbuild" "once" "prod"] "compile"]}}
+    :profiles
+    {:dev
+     {:dependencies [[binaryage/devtools "0.8.2"]]
+      :plugins      [[lein-figwheel "0.5.9"]]}
+     :prod
+     {:prep-tasks   [["cljsbuild" "once" "prod"] "compile"]}}
 
-   :cljsbuild
-   {:builds
-    [{:id           "dev"
-      :source-paths ["src/cljs"]
-      :figwheel     {:on-jsload "caudal.dashboard.core/mount-root"}
-      :compiler     {:main                 caudal.dashboard.core
-                     :output-to            "resources/public/js/compiled/caudal-dashboard.js"
-                     :output-dir           "resources/public/js/compiled/out"
-                     :asset-path           "js/compiled/out"
-                     :source-map-timestamp true
-                     :preloads             [devtools.preload]
-                     :external-config      {:devtools/config {:features-to-install :all}}}}
-                    
-
-     {:id           "prod"
-      :source-paths ["src/cljs"]
-      :compiler     {:main            caudal.dashboard.core
-                     :output-to       "resources/public/js/compiled/caudal-dashboard.js"
-                     :optimizations   :advanced
-                     :closure-defines {goog.DEBUG false}
-                     :pretty-print    false}}]}
+    :cljsbuild
+    {:builds
+     [{:id           "dev"
+       :source-paths ["src/cljs"]
+       :figwheel     {:on-jsload "caudal.dashboard.core/mount-root"}
+       :compiler     {:main                 caudal.dashboard.core
+                      :output-to            "resources/public/js/compiled/caudal-dashboard.js"
+                      :output-dir           "resources/public/js/compiled/out"
+                      :asset-path           "js/compiled/out"
+                      :source-map-timestamp true
+                      :preloads             [devtools.preload]
+                      :external-config      {:devtools/config {:features-to-install :all}}}}
 
 
-    
+      {:id           "prod"
+       :source-paths ["src/cljs"]
+       :compiler     {:main            caudal.dashboard.core
+                      :output-to       "resources/public/js/compiled/caudal-dashboard.js"
+                      :optimizations   :advanced
+                      :closure-defines {goog.DEBUG false}
+                      :pretty-print    false}}]}
 
-   :codox {:defaults {:doc/format :markdown}}
-   :aot :all)
+
+
+
+    :codox {:defaults {:doc/format :markdown}}
+    :aot :all)
 
 ;  [caudal.core.global
 ;   caudal.core.main
