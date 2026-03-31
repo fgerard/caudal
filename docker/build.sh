@@ -1,22 +1,44 @@
 #!/bin/bash
 set -e
 
-BASE_BUILD_DIR=$1
-EXTRA_LIB_DIR=$2
+BASE_BUILD_DIR=""
+EXTRA_LIB_DIR=""
+PUSH=false
+
+# 🧠 parseo de argumentos
+for arg in "$@"; do
+  case $arg in
+    --push)
+      PUSH=true
+      shift
+      ;;
+    *)
+      if [ -z "$BASE_BUILD_DIR" ]; then
+        BASE_BUILD_DIR=$arg
+      elif [ -z "$EXTRA_LIB_DIR" ]; then
+        EXTRA_LIB_DIR=$arg
+      fi
+      ;;
+  esac
+done
 
 if [ -z "$BASE_BUILD_DIR" ]; then
-  echo "Uso: ./build.sh <directorio-build> [directorio-libs-extra]"
+  echo "Uso: ./build.sh <directorio-build> [directorio-libs-extra] [--push]"
   exit 1
 fi
 
 BASE_DIR=$(cd "$(dirname "$0")" && pwd)
 CONTENT_DIR="$BASE_DIR/container-content"
 
+# 🔥 extraer versión
+DIR_NAME=$(basename "$BASE_BUILD_DIR")
+VERSION=$(echo "$DIR_NAME" | sed -E 's/.*-(.*)/\1/')
+
+echo "📌 Versión detectada: $VERSION"
+
 echo "🧹 Limpiando container-content..."
 rm -rf "$CONTENT_DIR"
-mkdir -p "$CONTENT_DIR/lib"
-mkdir -p "$CONTENT_DIR/resources"
-mkdir -p "$CONTENT_DIR/bin"
+mkdir -p "$CONTENT_DIR/lib" "$CONTENT_DIR/resources" "$CONTENT_DIR/bin"
 
 echo "📦 Copiando project.clj..."
 cp "$BASE_BUILD_DIR/project.clj" "$CONTENT_DIR/"
@@ -37,21 +59,36 @@ cp "$MAIN_JAR" "$CONTENT_DIR/lib/"
 echo "📦 Copiando resources..."
 cp -r "$BASE_BUILD_DIR/resources/"* "$CONTENT_DIR/resources/" 2>/dev/null || true
 
-echo "📦 Copiando bin/ (script de arranque)..."
+echo "📦 Copiando bin/..."
 cp -r "$BASE_DIR/bin/"* "$CONTENT_DIR/bin/"
 
-# libs extra opcionales
+# libs extra
 if [ -n "$EXTRA_LIB_DIR" ]; then
   echo "📦 Copiando jars extra desde $EXTRA_LIB_DIR..."
   find "$EXTRA_LIB_DIR" -name "*.jar" -exec cp {} "$CONTENT_DIR/lib/" \;
 fi
 
-echo "🐳 Construyendo imagen Docker..."
+# 🔥 nombre de imagen (ajústalo a tu Docker Hub)
+IMAGE_NAME="quantumlabs/caudal"
 
-docker buildx build \
-  --platform linux/amd64 \
-  -t caudal:latest \
-  -f "$CONTENT_DIR/Dockerfile" \
-  "$CONTENT_DIR"
+echo "🐳 Construyendo imagen..."
 
-echo "✅ Imagen creada: caudal:latest"
+if [ "$PUSH" = true ]; then
+  echo "🚀 Modo PUSH activado"
+  docker buildx build \
+    --platform linux/amd64 \
+    -t ${IMAGE_NAME}:${VERSION} \
+    -f "$CONTENT_DIR/Dockerfile" \
+    --push \
+    "$CONTENT_DIR"
+else
+  docker buildx build \
+    --platform linux/amd64 \
+    -t ${IMAGE_NAME}:${VERSION} \
+    -f "$CONTENT_DIR/Dockerfile" \
+    --load \
+    "$CONTENT_DIR"
+fi
+
+echo "✅ Imagen creada:"
+echo "   - ${IMAGE_NAME}:${VERSION}"
