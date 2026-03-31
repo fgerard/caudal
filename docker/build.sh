@@ -1,29 +1,57 @@
-#!/usr/bin/env bash
-#
-# Docker Image Generator 
-#
+#!/bin/bash
+set -e
 
-export DKR_PATH="$(cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-export ROOT_PATH=$(dirname $DKR_PATH)
-export PROJECT=$( grep "defproject" $ROOT_PATH/project.clj )
-export SERVICE_NAME=$( echo $PROJECT | awk '{print($2)}' )
-export SERVICE_VERSION=$( echo $PROJECT | awk '{print(substr($3,2,length($3)-2))}' )
+BASE_BUILD_DIR=$1
+EXTRA_LIB_DIR=$2
 
-echo "Docker build path : $DKR_PATH"
-
-# Custom Registry
-#
-# export DKR_HOST="myprivateregistry.com"
-# export DKR_PORT=5000
-# export DKR_NAMESPACE="devops"
-
-if [ -z ${DKR_HOST} ] || [ -z ${DKR_PORT} ] || [ -z ${DKR_NAMESPACE} ]; then
-  echo "DKR_HOST, DKR_PORT or DKR_NAMESPACE not defined"
-else
-  export DKR_IMG=$DKR_HOST:$DKR_PORT/$DKR_GROUP
+if [ -z "$BASE_BUILD_DIR" ]; then
+  echo "Uso: ./build.sh <directorio-build> [directorio-libs-extra]"
+  exit 1
 fi
-export DKR_IMG=$SERVICE_NAME:$SERVICE_VERSION
 
-echo $DKR_IMG
+BASE_DIR=$(cd "$(dirname "$0")" && pwd)
+CONTENT_DIR="$BASE_DIR/container-content"
 
-cd $ROOT_PATH && bin/make-distro.sh && rm -fv $DKR_PATH/$SERVICE_NAME-$SERVICE_VERSION.tar.gz && mv $SERVICE_NAME-$SERVICE_VERSION.tar.gz $DKR_PATH/ && git checkout $DKR_PATH/Dockerfile && cd $DKR_PATH  && sed -i.bk s/REPLACE_VERSION/$SERVICE_VERSION/g Dockerfile && docker build -t $DKR_IMG .
+echo "🧹 Limpiando container-content..."
+rm -rf "$CONTENT_DIR"
+mkdir -p "$CONTENT_DIR/lib"
+mkdir -p "$CONTENT_DIR/resources"
+mkdir -p "$CONTENT_DIR/bin"
+
+echo "📦 Copiando project.clj..."
+cp "$BASE_BUILD_DIR/project.clj" "$CONTENT_DIR/"
+
+echo "📦 Copiando Dockerfile..."
+cp "$BASE_DIR/Dockerfile" "$CONTENT_DIR/"
+
+echo "📦 Copiando JAR principal..."
+MAIN_JAR=$(ls "$BASE_BUILD_DIR"/lib/caudal-*-standalone.jar 2>/dev/null | head -n 1)
+
+if [ -z "$MAIN_JAR" ]; then
+  echo "❌ No se encontró caudal-*-standalone.jar"
+  exit 1
+fi
+
+cp "$MAIN_JAR" "$CONTENT_DIR/lib/"
+
+echo "📦 Copiando resources..."
+cp -r "$BASE_BUILD_DIR/resources/"* "$CONTENT_DIR/resources/" 2>/dev/null || true
+
+echo "📦 Copiando bin/ (script de arranque)..."
+cp -r "$BASE_DIR/bin/"* "$CONTENT_DIR/bin/"
+
+# libs extra opcionales
+if [ -n "$EXTRA_LIB_DIR" ]; then
+  echo "📦 Copiando jars extra desde $EXTRA_LIB_DIR..."
+  find "$EXTRA_LIB_DIR" -name "*.jar" -exec cp {} "$CONTENT_DIR/lib/" \;
+fi
+
+echo "🐳 Construyendo imagen Docker..."
+
+docker buildx build \
+  --platform linux/amd64 \
+  -t caudal:latest \
+  -f "$CONTENT_DIR/Dockerfile" \
+  "$CONTENT_DIR"
+
+echo "✅ Imagen creada: caudal:latest"

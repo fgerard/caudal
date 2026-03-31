@@ -1,22 +1,13 @@
-FROM azul/zulu-openjdk:8u312-8.58.0.13
+FROM azul/zulu-openjdk:21-lts
 
-MAINTAINER Daniel Estevez <destevez@quantumlabs.ai>
+ENV APP_HOME=/opt/quantumlabs/ai_streamer
 
-ENV PACKAGE_NAME=caudal \
-    PACKAGE_VERSION=0.7.19
+WORKDIR ${APP_HOME}
 
-ENV CAUDAL_HOME=/home/${PACKAGE_NAME} \
-    CAUDAL_EXT=/home/${PACKAGE_NAME}/ext \
-    CAUDAL_CONFIG=/home/${PACKAGE_NAME}/config 
+COPY . ${APP_HOME}
 
-ADD ${PACKAGE_NAME}-${PACKAGE_VERSION}.tar.gz /home/
+RUN chmod +x ${APP_HOME}/bin/ai_streamer
 
-RUN mv /home/${PACKAGE_NAME}-${PACKAGE_VERSION} /home/${PACKAGE_NAME}
+ENV PATH=${PATH}:${APP_HOME}/bin
 
-VOLUME [ "$CAUDAL_CONFIG" "$CAUDAL_EXT" ]
-
-WORKDIR $CAUDAL_HOME
-
-ENV PATH=${PATH}:${CAUDAL_HOME}/bin
-
-CMD [ "caudal", "start" ]
+CMD ["ai_streamer", "start"]

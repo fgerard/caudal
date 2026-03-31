@@ -1,0 +1,150 @@
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn get-or-create [a-map camera]
+  (if (a-map camera)
+    a-map
+    (if-let [plc (new-plc camera)]
+      (assoc a-map camera (merge
+                           {:camera camera
+                            :plc plc
+                            :created (System/currentTimeMillis)
+                            :last-upd (System/currentTimeMillis)}
+                           (read-plc-status plc)))
+      a-map)))
+
+(defn getPLC [camera]
+  (log/info "PLC " camera (camera->plc camera))
+  (-> plc-atom
+      (swap! get-or-create camera)
+      (get camera)))
+
+(defn update-status [{:keys [camera plc] :as plc-info}]
+  (let [plc (or plc (new-plc camera))]
+    (merge {:camera camera
+            :plc plc
+            :created (System/currentTimeMillis)}
+           plc-info
+           (read-plc-status plc) 
+           {:last-upd (System/currentTimeMillis)})))
+
+(defn update-atom-status [atom-val camera]
+  (update atom-val camera update-status))
+
+(defn updatePLC [camera]
+  (let [plc-map (swap! plc-atom update-atom-status camera)]
+    (plc-map camera)))
+
+
+
+; regresa algo como:
+;{:marcas [false false true true false false ....] ; ojo indices 0..13
+; :contadores [10 20 3 14 ...]} ; ojo indices 0..13
+
+; propuesta de funcion para generar una apertura tomando en cuenta el
+; estado actual del PLC
+
+
+; usaremos core.async para esta funcionalidad concurrente, tendremos 
+; una cola que recibe un 'plc' y le manda una apertura en un future para
+; que pueda hacer la pausa de 20ms sin que se detenga el proceso, este 
+; future conoce una chan a donde informar el resultado del pulso
+
+(defn exec-aperturar [{:keys [plc delta] :as info} out-chan]
+  (future
+    (try
+      (.writeCoil plc 1 8256 true)
+      (Thread/sleep delta)
+      (.writeCoil plc 1 8256 false)
+      (>!! out-chan (merge info {:last-opr :open-sent}))
+      (catch Exception e
+        (log/error e)
+        (>!! out-chan (merge info {:last-opr :open-error}))))))
+
+(defn loop-apertura [in-chan out-chan]
+  (go-loop []
+    (let [info (<! in-chan)]
+      (exec-aperturar info out-chan)
+      (recur))))
+
+
+(defun apertura 
+  ; M2 = true pluma en paro
+  ([apertura-chan informa-chan retry-chan plc-info 
+    [_ _ true _ _ _ _ _ _ _ _ _ _ false]]
+   (>!! informa-chan (assoc plc-info :informa :pluma-en-paro)))
+  ; M2: false, M3: true, M4: false, M5: false, M13: false (se manda la apertura)
+  ([apertura-chan informa-chan retry-chan plc-info 
+    [_ _ false true false false _ _ _ _ _ _ _ false]]
+   (>!! apertura-chan (assoc plc-info :informa :send-open :delta 20)))
+  ; M2: false pero en estado no listo para abrir, esperar 250 ms y reintentar
+  ([apertura-chan informa-chan retry-chan plc-info 
+    [_ _ false _ _ _ _ _ _ _ _ _ _ false]]
+   (>!! retry-chan (assoc plc-info :informa :delay :delta 250))
+   )
+  ; pluma está reiniciando esperar 250ms y reintentar
+  ([apertura-chan informa-chan retry-chan plc-info 
+    [_ _ _ _ _ _ _ _ _ _ _ _ _ true]]
+   (>!! retry-chan (assoc plc-info :informa :reiniciando :delta 1000)))
+  )
+
+; a continuación se describe el proceso de interacción del caudal con
+; este codigo que se encarga del manejo de los PLCs, tendremos un atom
+; con el estado de todos los PLCs en un mapa donde su llave es la camara
+; el caudal cuando determine un ingreso en lugar del send-events esos events
+; se enviarán a una funcion aquí definida, los paso serán:
+;
+; obtener el estado del PLC asociado a la camara del event, en el estado 
+; del PLC se tiene el evento anterior que disparó una acción de PLC.
+; El PLC tiene la siguiente información:
+;    :plc (objeto plc)
+;    :event (event pasado que disparó la acción)
+;    :drops (n int con el numero de eventos descartados por mismo valor)
+;    :retry-cnt (n int contador de reintentos)
+;    :max-retry-cnt (número máximo de reintentos cuando existe error)
+;    :created (millis con la creación)
+;    :last-upd (millis con ultimo update)
+;    :delta-retry (millis de espera para reintento)
+;    :marcas0 (vector bools actuales con vanderas del PLC)
+;    :contadores0 (vector ints actuales con valores de contadores del PLC)
+;    :marcas1 (vector bools anterior)
+;    :contadores1 (vector ints anterior)
+;
+; Con la información del PLC y el evento
+;    1. Si el valor (placa/id) del evento es el mismo que el evento anterior (en el PLC) y
+;       el contador (drops) de descartes es menor a "n" (configurable), descartamos esta invocacion
+;       e incrementamos el contador de descartes (drops), si el contador de drops es
+;       mayor o igual a "n" (configurable), pasamos al paso (2)
+;    2. Reseteamos a 0 el valor del contador drops, actualizamos los valores
+;       del estado del PLC (copiamos marcas0 y contadores 0 a marcas1 y contadores1
+;       respectivamente, luego leemos el estado del PLC y lo ponemos en marcas0 y
+;       contadores0), actualizamos :last-upd con now y :event con este event, luego
+;       invocamos "apertura" tomando en cuenta marcas0,plc y event
+;    3. Función "apertura" es un defun que tiene como primer parametro el marcas0, 
+;       como segundo parametro el estado del PLC (sacado del atom), y el event.
+;       apertura usa un atom con un mapa:
+;         {:exec-open (chan que tiene asociado y go-loop que lee un plc 
+;                      y toma esta info y ejecuta en un future el pulso de apertura, el
+;                      future deposita su resultado en la cola :proc-result)
+;          :proc-result (chan que tiene asociado un go-loop que procesa 
+;                        eventos-resultado ver más adelante)
+;          :retry (chan que tiene asociado un go-loop que recibe estado de PLC, event
+;                  del estado del PLC obtiene :delta-retry y crea un future que
+;                  espera :delta-retry para luego ejecutar nuevamente la función
+;                  "apertura")
+;          :problem-retry (chan que tiene asociado un go-loop, este proceso envia
+;                          una alerta indicando el problema y si el contador 
+;                          :retry-cnt en menor que :max-retry-cont, se incremeta 
+;                          el retry-cnt y sel manda la información a la cola :retry)}
+;       Utilizando macas0, el defun apertura selecciona la cola en donde se pone
+;       la información para ser procesada
+;
+;    4. El proceso de eventos resultado :proc-result que se encuentra en un go-loop
+;       obtiene un evento-resultado y dependiendo de si contenido hace:
+;       :open-sent (se envió con exito un pulso de apertura) este código ejecuta
+;                   lo que era el send-events mandando a la plataforma el evento
+;                   idicando que se aperturó)
+;       :open-error (indica que el future generó una Exception al intentar
+;                    comunicarse con el PLC, aqui se debe:
+;                    1. mandar el send-event indicando que hay problema con el PLC
+;                    2. resetear conección con PLC
+;                    3. "informar (telegram?)" del error)
