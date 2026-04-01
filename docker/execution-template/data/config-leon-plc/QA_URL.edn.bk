@@ -1,4 +1,0 @@
-[{:url "http://172.28.61.195/accesos/api/"
-      :auth "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWlufDEiLCJuYmYiOjE3MTM4MjgyMzgsImV4cCI6MjAyOTE4ODIzOCwiaWF0IjoxNzEzODI4MjM4LCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjQ0MzIxIiwiYXVkIjoiaHR0cDovL2xvY2FsaG9zdDo0NDMyMSJ9.WbwY75ymf2XtcTyGXeeeeqd9AFksicwJyWubdET7qnk"}
-     {:url "https://accesos.azurewebsites.net/api/"
-      :auth "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWlufDEiLCJuYmYiOjE3MTM4MjgyMzgsImV4cCI6MjAyOTE4ODIzOCwiaWF0IjoxNzEzODI4MjM4LCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjQ0MzIxIiwiYXVkIjoiaHR0cDovL2xvY2FsaG9zdDo0NDMyMSJ9.WbwY75ymf2XtcTyGXeeeeqd9AFksicwJyWubdET7qnk"}]
