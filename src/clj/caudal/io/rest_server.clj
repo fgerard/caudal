@@ -155,7 +155,7 @@
 
   )
 
-(defn create-publisher-routes [states]
+(defn create-publisher-routes [states sink]
   [;[["/"] {{:request-method :get} handle/index-handler}]
    [["app"] {{:request-method :get} handle/index-handler}]
    ;[["/dashboard"] {{:request-method :get} handle/index-handler}]
@@ -170,6 +170,8 @@
    [["state/" :id "/" :key "/" :by1 "/" :by2 "/" :by3 "/" :by4 "/" :by5] {{:request-method :get} (partial handle/state-handler states)}]
    [["wslisten"] {{:request-method :get} ajax-get-or-ws-handshake-fn}]
    [["wslisten"] {{:request-method :post} ajax-post-fn}]
+   [["event"] {{:request-method :post} (partial handle/event-handler sink)}]
+   [["event"] {{:request-method :put} (partial handle/event-handler sink)}]
    ])
 
 (defn create-routes [sink]
@@ -179,7 +181,7 @@
    [["event"] {{:request-method :put} (partial handle/event-handler sink)}]])
 
 (defn create-handler [publisher? sink states]
-  (let [routes (if publisher? (create-publisher-routes states) (create-routes sink))]
+  (let [routes (if publisher? (create-publisher-routes states sink) (create-routes sink))]
     (make-handler routes)))
 
 (defn create-app [publisher? sink states cors gzip]
