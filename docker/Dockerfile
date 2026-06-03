@@ -10,4 +10,4 @@ RUN chmod +x ${APP_HOME}/bin/ai_streamer
 
 ENV PATH=${PATH}:${APP_HOME}/bin
 
-CMD ["ai_streamer", "start"]
+CMD ["ai_streamer", "-D", "start"]
