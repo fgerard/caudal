@@ -14,7 +14,7 @@
 ; tiene el partial de arranque listo para crear uno nuevo 
 ; el sink-chan asociado al listener (NO EL LISTENER) last-read y el 
 ; inactivity
-; ej: {"192.168.10.31" {:ctor <ctor-fun> 
+; ej: {"192.168.10.31" {:ctor <ctor-fun> ; esta funcion regresa un par [reader-configurasodo, sink-chan]
 ;                       :sink-chan <sink-chan>
 ;                       :inactivity <inactivity ms}}
 (defonce listeners-atom (atom {}))
@@ -23,14 +23,15 @@
 ; {<controler1> <last-read>, <controler2> <last-read>,...}
 (defonce activity-atom (atom {}))
 
-(defn stop&disconnect [listener controler]
+; d-reader es una instancia del objeto ImpinjReader
+(defn stop&disconnect [d-reader controler]
   (try
     (log/info "INACTIVITY: stopping " controler)
-    (.stop listener)
+    (.stop d-reader)
     ;(Thread/sleep 2000)
     (log/info "INACTIVITY: stoped " controler)
     (log/info "INACTIVITY: disconnecting " controler)
-    (.disconnect listener)
+    (.disconnect d-reader)
     ;(Thread/sleep 2000)
     (log/info "INACTIVITY: disconnected " controler)
     true
@@ -42,6 +43,8 @@
 (defn create-new-listener [ctor controler]
   (try
     (log/info "INACTIVITY: Creating listener " controler)
+    ; el ctor es la ejecucion del start-server y regresa un NUEVO reader configurado y un sink-chan ojo ya esta
+    ; tambibien configurados los diferentes loops de control
     (let [el-par (ctor)]
       (log/info "INACTIVITY: Created listener " controler)
       el-par)
@@ -69,7 +72,7 @@
             (close! sink-chan)
             (swap! activity-atom assoc controler (System/currentTimeMillis))
             
-            (if-let [[_ new-sink-chan] (create-new-listener ctor controler)]
+            (if-let [[_ new-sink-chan] (create-new-listener ctor controler)] ; el reader no hace falta guardar referencia porque el sink-chan nuevo...
               (assoc result controler {:ctor ctor
                                        :sink-chan new-sink-chan
                                        :inactivity (or inactivity 900000)})
@@ -150,7 +153,6 @@
         methods (into []
                       (filter
                        (fn [method]
-                             ;(log/info (format "method name: %s -> %s" (.getName method) (re-matches #"get.*" (.getName method))))
                          (re-matches #"get.*" (.getName method)))
                        (.getDeclaredMethods clase)))]
     (into {} (filter identity
@@ -198,32 +200,28 @@
                    :removed #{}
                    :last-update 0}}
 
-(defn create-key [{:keys [name plant]}]
-  (str name "_" plant))
-
 (def default-init-state-Xcontroler {:ids {} ; mapa con id->ts
                                     :id->evt {} ;mapa con id->evt original
                                     :delta 1000
                                     :removed #{}
                                     :last-update 0})
 
-(defn timed-cache-put [controler-info id evt]
+(defn timed-cache-put [{:keys [controler] :as controler-info} id evt]
   (swap!
    timed-state
    (fn [state]
-     (let [now (System/currentTimeMillis)
-           controler-key (create-key controler-info)]
+     (let [now (System/currentTimeMillis)]
        (-> state
-           (assoc-in [controler-key :ids id] now)
-           (assoc-in [controler-key :id->evt id] evt)
-           (assoc-in [controler-key :last-update] now))))))
+           (assoc-in [controler :ids id] now)
+           (assoc-in [controler :id->evt id] evt)
+           (assoc-in [controler :last-update] now))))))
 
-(defn timed-cache-get&clear-removed [controler-info delta]
+(defn timed-cache-get&clear-removed [{:keys [controler] :as controler-info} delta]
   (let [d-new-state (swap!
                      timed-state
                      (fn [controlers-state]
                        (let [; sacamos la seccion dentro de este atomo de un controller
-                             controler-state (get controlers-state (create-key controler-info) default-init-state-Xcontroler)
+                             controler-state (get controlers-state controler default-init-state-Xcontroler)
                              {:keys [ids id->evt]} controler-state
                              controler-state (assoc controler-state :removed #{})
                              now (System/currentTimeMillis)
@@ -240,8 +238,8 @@
                                                         new-state)))
                                                   controler-state
                                                   ids)]
-                         (assoc controlers-state (create-key controler-info) new-controler-state))))]
-    (get-in d-new-state [(create-key controler-info) :removed])))
+                         (assoc controlers-state controler new-controler-state))))]
+    (get-in d-new-state [controler :removed])))
 
 (defn convert-tag2event [t]
   (let [isFastIdPresent (.isFastIdPresent t)
@@ -354,10 +352,10 @@
 ; una lectura del mismo tag e incluso en diferente antena, en el happy path pasado el tiempo 
 ; se envia al sink (el flujo normal del caudal) el evento, una vez ya enviado ahora si ya no
 ; se manda, es decir al enviar el seleccionado se hace el timed-cache-put
-(defn send-if-not-in-cache [controler-info d-id-re tag-policy sink {:keys [d-id] :as evt}]
+(defn send-if-not-in-cache [{:keys [controler] :as controler-info} d-id-re tag-policy sink {:keys [d-id] :as evt}]
   (log/debug :re-matches d-id-re d-id (re-matches d-id-re d-id))
   (if (re-matches d-id-re d-id)
-    (let [tag-exists? (get-in @timed-state [(create-key controler-info) :ids d-id])]
+    (let [tag-exists? (get-in @timed-state [controler :ids d-id])]
       (log/info (str "TAG.0 " (pr-str tag-exists?)))
       (if-not tag-exists?
         (let [_ (log/info "TAG.0.0")
@@ -373,7 +371,7 @@
         ))
     (log/debug (format "Dropping tag: %s" (pr-str evt)))))
 
-(defn start-tag2sink-remove-duplicates [d-reader controler controler-info d-id-re sink tag-policy sink-chan]
+(defn start-tag2sink-remove-duplicates [d-reader {:keys [controler] :as controler-info} d-id-re sink tag-policy sink-chan]
   (go 
     (let [_ (log/info "INACTIVITY: (1) esperando en sink-chan " controler)
           e (<! sink-chan)
@@ -383,14 +381,16 @@
         (loop [e e] ; RfDopplerFrequency es string y negativo significa que se aleja
           (if e
             (do
-        ; te piden que des stop y disconnect y respondas al terminar
+              ; te piden que des stop y disconnect y respondas al terminar aqui es que restart?-reduction puso un chan
+              ; en el sink-chan para indicar a este metodo que termine y se salga, entonces si sale del sink-chan un chan es el wait-chan
+              ; que restart?-reduction esta esperando a que este cierre y se reestablezca todo
               (if (instance? clojure.core.async.impl.channels.ManyToManyChannel e)
-                (let [_ (log/info "INACTIVITY: llego un chan " controler)
+                (let [_ (log/info "INACTIVITY: llego un chan (restart?-reduction) " controler)
                       success? (stop&disconnect d-reader controler)]
                   (log/info "INACTIVITY: disconected success: " success? " " controler)
-                  (>! e success?)) 
+                  (>! e success?))
 
-        ; es un evento normal
+                ; es un evento normal
                 (let [{:keys [event RfDopplerFrequency]} e
                       {:keys [direction] :or {direction :none}} tag-policy
                       use-it (condp = direction
@@ -402,39 +402,30 @@
                       :ON_TAG_READ (send-if-not-in-cache controler-info d-id-re tag-policy sink e)
                       :ON_TAG_REMOVED (sink e))
                     (log/info (str  "TAG.00 filtrando evento: " direction event)))))
-              #_(when (= controler "10.180.10.133")
-                (log/info "INACTIVITY: (2) esperando en sink-chan " controler))
               (let [e (<! sink-chan)]
-                #_(when (= controler "10.180.10.133")
-                  (log/info "INACTIVITY: (2) salio del sink-chan :" controler e))
                 (recur e)))
       ; te cerraron el chan no haces nada 
             (log/info "INACTIVITY: sink-chan closed " controler)))
-            (catch Exception e
-              (log/error "INACTIVITY: algo muy malo paso")
-              (log/error e))))))
+        (catch Exception e
+          (log/error "INACTIVITY: algo muy malo paso")
+          (log/error e))))))
 
-(defn start-timed-cache-cleanup [controler-info delta-loop sink sink-chan]
+(defn start-timed-cache-cleanup [controler-info delta-loop sink]
   (go-loop [removed-now (timed-cache-get&clear-removed controler-info delta-loop)]
     #_(when (seq removed-now)
         (log/info (pr-str [:removig-tags (mapv :d-id removed-now)])))
     (doseq [{:keys [d-id] :as evt} removed-now]
       (let [removed-event (merge evt {:event :ON_TAG_REMOVED
                                       :rfid-ts (System/currentTimeMillis)})]
-        (log/info (pr-str [:removing-tag controler-info " " sink-chan " " removed-event]))
-        ;(>! sink-chan removed-event)
-        (sink removed-event)
-        ))
+        (log/info (pr-str [:removing-tag controler-info "  " removed-event]))
+        (sink removed-event)))
     (<! (timeout delta-loop))
     (recur (timed-cache-get&clear-removed controler-info delta-loop))))
 
-(defn t->evt [evt-key {:keys [name plant]} controler tagORevt]
+(defn t->evt [evt-key controler-info tagORevt]
   (try
-    (let [extra {:event evt-key
-                 :controler-name name
-                 :plant plant
-                 :controler controler
-                 :rfid-ts (System/currentTimeMillis)}
+    (let [extra (merge {:event evt-key
+                        :rfid-ts (System/currentTimeMillis)} controler-info)
           evt (cond  
                 (map? tagORevt) (merge tagORevt extra)
                 (instance? clojure.core.async.impl.channels.ManyToManyChannel tagORevt) tagORevt
@@ -442,14 +433,12 @@
       evt)
     (catch Exception e
       (.printStackTrace e)
-      {:controler-name name
-       :plant plant
-       :controler controler
-       :event :ON_TAG_ERROR
-       :msg (.getMessage e)
-       :rfid-ts (System/currentTimeMillis)})))
+      (merge {:event :ON_TAG_ERROR
+              :msg (.getMessage e)
+              :rfid-ts (System/currentTimeMillis)}
+             controler-info))))
 
-(defn put-event-in-sink [activity-atom controler sink-chan t]
+(defn put-event-in-sink [{:keys [controler]} sink-chan t]
   (try
     ; actualizamos que este leyo tag ahora
     (swap!
@@ -461,62 +450,76 @@
       (.printStackTrace e)
       false)))
 
-(defn create-listener [d-reader chan-buf-size sink controler-info controler cleanup-delta d-id-re tag-policy]
-  (let [sink-chan (chan chan-buf-size (map (partial t->evt :ON_TAG_READ controler-info controler)))]
-    (log/warn (str "create-listener " controler-info " " controler " " sink-chan))
-    (start-tag2sink-remove-duplicates d-reader controler controler-info d-id-re sink tag-policy sink-chan)
-    (start-timed-cache-cleanup controler-info cleanup-delta sink sink-chan)
+(defn create-listener [d-reader chan-buf-size sink controler-info cleanup-delta d-id-re tag-policy]
+  (let [sink-chan (chan chan-buf-size (map (partial t->evt :ON_TAG_READ controler-info)))]
+    (log/warn (str "create-listener " controler-info " " sink-chan))
+    (start-tag2sink-remove-duplicates d-reader controler-info d-id-re sink tag-policy sink-chan)
+    (start-timed-cache-cleanup controler-info cleanup-delta sink)
     [(reify TagReportListener
        (onTagReported [_ reader report]
          (let [tags (.getTags report)]
            (loop [[t & rest] tags]
-             (when (and t (put-event-in-sink activity-atom controler sink-chan t))
-               (recur rest)))))) sink-chan]))
+             (when (and t (put-event-in-sink controler-info sink-chan t))
+               (recur rest)))))) 
+     sink-chan]))
 
-(defn create-keep-alive-listener [controler-info controler]
+(defn create-keep-alive-listener [controler-info]
   (reify KeepaliveListener
     (onKeepalive [_ reader event]
-      (let [e (t->evt :ON_KEEP_ALIVE controler-info controler {})]
+      (let [e (t->evt :ON_KEEP_ALIVE controler-info {})]
         (log/info e)))))
 
 (declare start-server)
 
 (defn create-reconnect2antenna-channel []
   (let [reconnect-chan (chan 10)]
-    (go-loop [[sink chan-buf-size controler-info controler RfMode antennas
+    (go-loop [[sink chan-buf-size controler-info  RfMode antennas
                cleanup-delta fastId d-id-re keepalive-ms tag-policy] (<! reconnect-chan)]
       (log/error "Reconnecting reader " (pr-str controler-info))
-      (when-not (start-server sink chan-buf-size controler-info controler RfMode antennas
-                              cleanup-delta fastId d-id-re keepalive-ms tag-policy)
-        (go
-          (log/error "Reconeccion no exitosa, reintentando el 60s")
-          (<! (timeout 60000))
-          (>! reconnect-chan [[sink chan-buf-size controler-info controler RfMode antennas
-                               cleanup-delta fastId d-id-re keepalive-ms tag-policy]])))
-      (recur (<! reconnect-chan)))
+      (let [ctor (partial start-server sink chan-buf-size controler-info RfMode antennas
+                          cleanup-delta fastId d-id-re keepalive-ms tag-policy)
+            [d-reader sink-chan] (ctor)]
+        (if d-reader
+          (let [controler (:controler controler-info)]
+            (log/info "Reconnected reader " (pr-str controler-info))
+            (swap! listeners-atom update controler
+                   (fn [listener]
+                     (-> listener
+                         (assoc :ctor ctor)
+                         (assoc :sink-chan sink-chan))))
+            (swap! activity-atom assoc controler (System/currentTimeMillis)))
+          (go
+            (log/error "Reconeccion no exitosa, reintentando el 60s")
+            (<! (timeout 60000))
+            (>! reconnect-chan [[sink chan-buf-size controler-info RfMode antennas
+                                 cleanup-delta fastId d-id-re keepalive-ms tag-policy]])))
+        (recur (<! reconnect-chan))))
     reconnect-chan))
 
-(def reconnect-chan (create-reconnect2antenna-channel))
+(defonce reconnect-chan (create-reconnect2antenna-channel))
 
-(defn create-connection-lost-listener [sink chan-buf-size controler-info controler RfMode antennas
+(defn create-connection-lost-listener [sink chan-buf-size controler-info RfMode antennas
                                        cleanup-delta fastId d-id-re keepalive-ms tag-policy]
   (reify ConnectionLostListener
     (onConnectionLost [_ reader]
       (try
         (let [isConnected? (.isConnected reader)
-              e (t->evt :ON_CONNECTION_LOST controler-info controler {:connected isConnected?})]
+              e (t->evt :ON_CONNECTION_LOST controler-info {:connected isConnected?})]
           (log/error e)
-          (put! reconnect-chan [sink chan-buf-size controler-info controler RfMode antennas
+          (sink e) ; mandamos el evento para que la configuracion especifica del activity vea qué hace con esto
+                                
+          (put! reconnect-chan [sink chan-buf-size controler-info RfMode antennas
                                 cleanup-delta fastId d-id-re keepalive-ms tag-policy]))
         (catch Throwable t
           (log/error t))))))
 
-(defn start-server [sink chan-buf-size controler-info controler RfMode antennas
+(defn start-server [sink chan-buf-size {:keys [controler] :as controler-info} RfMode antennas
                     cleanup-delta fastId d-id-re keepalive-ms tag-policy]
     ;(PropertyConfigurator/configure "log4j.properties")
   (try
-    (log/info (format "Starting RFID Server, controler: %s -> antenas: %s" controler antennas))
-    (let [reader (doto (ImpinjReader.)
+    
+    (let [_ (log/info (format "Starting RFID Server, controler: %s -> antenas: %s" controler antennas))
+          reader (doto (ImpinjReader.)
                    (.connect controler))
           features (.queryFeatureSet reader)
 
@@ -566,9 +569,9 @@
                        (.disableAll)
                        (.enableById (mapv #(short (first %)) antennas))
                        (configAntennas antennas))
-          [listener sink-chan] (create-listener reader chan-buf-size sink controler-info controler cleanup-delta d-id-re tag-policy)
-          keepAliveListener (create-keep-alive-listener controler-info controler)
-          connectionLostListener (create-connection-lost-listener sink chan-buf-size controler-info controler RfMode antennas
+          [listener sink-chan] (create-listener reader chan-buf-size sink controler-info cleanup-delta d-id-re tag-policy)
+          keepAliveListener (create-keep-alive-listener controler-info)
+          connectionLostListener (create-connection-lost-listener sink chan-buf-size controler-info RfMode antennas
                                                                   cleanup-delta fastId d-id-re keepalive-ms tag-policy)]
       (.applySettings reader settings)
       (.setTagReportListener reader listener)
@@ -583,13 +586,11 @@
 
 (defmethod start-listener 'caudal.io.rfid-server
   [sink config]
-  (let [{:keys [controler-info controler RfMode antennas
+  (let [{:keys [controler-info RfMode antennas
                 cleanup-delta chan-buf-size
                 fastId d-id-re keepalive-ms
                 tag-policy inactivity]
-         :or {controler-info {:name "name-undefined"
-                              :plant 0}
-              chan-buf-size 10
+         :or {chan-buf-size 10
               RfMode 1002
               antennas [[1 true nil]]
               cleanup-delta 10000
@@ -597,9 +598,13 @@
               tag-policy {:type :max :delta 3000}
               keepalive-ms 60000
               inactivity (* 15 60 1000)}} (get-in config [:parameters])
+        controler (:controler controler-info)
+        _ (when-not controler
+            (log/fatal "No se especifico controler-info con controler en la configuracion, deteniendo sistema [tart-listener caudal.io.rfid-server]")
+            (System/exit 1))
         d-id-re (re-pattern d-id-re)
         _ (log/info "Filtrando d-id con: " d-id-re)
-        d-starter (partial start-server sink chan-buf-size controler-info controler RfMode antennas cleanup-delta fastId d-id-re keepalive-ms tag-policy)
+        d-starter (partial start-server sink chan-buf-size controler-info RfMode antennas cleanup-delta fastId d-id-re keepalive-ms tag-policy)
         [reader sink-chan] (d-starter)]
     (start-inactivity-loop-if-not-started)
     (swap! activity-atom assoc controler (System/currentTimeMillis))
@@ -607,4 +612,3 @@
                                            :sink-chan sink-chan
                                            :inactivity inactivity})
     [reader sink-chan]))
-
