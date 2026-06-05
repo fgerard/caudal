@@ -415,8 +415,10 @@
     #_(when (seq removed-now)
         (log/info (pr-str [:removig-tags (mapv :d-id removed-now)])))
     (doseq [{:keys [d-id] :as evt} removed-now]
-      (let [removed-event (merge evt {:event :ON_TAG_REMOVED
-                                      :rfid-ts (System/currentTimeMillis)})]
+      (let [removed-event (merge evt
+                                 {:event :ON_TAG_REMOVED
+                                  :rfid-ts (System/currentTimeMillis)}
+                                 controler-info)]
         (log/info (pr-str [:removing-tag controler-info "  " removed-event]))
         (sink removed-event)))
     (<! (timeout delta-loop))
@@ -425,7 +427,8 @@
 (defn t->evt [evt-key controler-info tagORevt]
   (try
     (let [extra (merge {:event evt-key
-                        :rfid-ts (System/currentTimeMillis)} controler-info)
+                        :rfid-ts (System/currentTimeMillis)} 
+                       controler-info)
           evt (cond  
                 (map? tagORevt) (merge tagORevt extra)
                 (instance? clojure.core.async.impl.channels.ManyToManyChannel tagORevt) tagORevt
