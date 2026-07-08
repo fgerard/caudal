@@ -336,6 +336,44 @@
           (recur max-evt) ; como c está cerrado el alts! termina con nil inmediatamente
           )))))
 
+(defn make-evt-reduction4every [sink evt-vec]
+  (let [selected-evt (get-more-frequent evt-vec)]
+    (swap! tag->chan dissoc (:d-id selected-evt))
+    (sink selected-evt)
+    selected-evt))
+
+(defmethod start-tag-reader-chan :every [controler-info
+                                         {:keys [modul wait4 trigger]
+                                          :or {modul 100 ; cada 100 manda evento 
+                                               wait4 10000
+                                               trigger 10 ; primer envio dispara pronto luego repite cada modul
+                                               }} 
+                                         sink 
+                                         c]
+  (go-loop [reduction [] N 1 last-evt nil] ; reduccion va a tener todos los eventos de este tag 
+    (log/info (str "TAG.2 every reduction: " N " - " (count reduction)))
+    (let [[evt ch] (alts! [c (timeout wait4)])]
+      (log/info (str "TAG.2.1 every (= c ch):" (= c ch) " d-id:" (:d-id evt) " --> " (count reduction)))
+      (cond (and (= ch c) evt) ; llego lectura de tag
+            (if (or (= N trigger) (= 0 (mod N modul)))
+              (let [selected-evt (make-evt-reduction4every sink reduction)]
+                (recur [] (inc N) selected-evt))
+              (recur (conj reduction evt) (inc N)  evt))
+
+            (and (= ch c) (nil? evt)) ; se cerro el chan
+            (do
+              (when last-evt
+                (timed-cache-put controler-info (:d-id last-evt) last-evt))
+              (log/info "TAG.2.2 channel closed "))
+
+            :else ; timeout
+            (do
+              (when last-evt
+                (timed-cache-put controler-info (:d-id last-evt) last-evt))
+              (log/info "TAG.2.3 timeout closing chan")
+              (close! c))))))
+
+
 ; obtienes o creas el chan de este tag ojo tambien deja un go-loop para eliminarlo al cierre
 (defn get-tag-chan [d-id]
   (let [[c created?] (-> (swap! tag->chan
