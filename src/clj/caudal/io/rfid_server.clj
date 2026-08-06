@@ -338,7 +338,7 @@
 
 (defn make-evt-reduction4every [sink evt-vec]
   (let [selected-evt (get-more-frequent evt-vec)]
-    (swap! tag->chan dissoc (:d-id selected-evt))
+    ;(swap! tag->chan dissoc (:d-id selected-evt))
     (sink selected-evt)
     selected-evt))
 
@@ -357,18 +357,20 @@
       (cond (and (= ch c) evt) ; llego lectura de tag
             (if (or (= N trigger) (= 0 (mod N modul)))
               (let [selected-evt (make-evt-reduction4every sink reduction)]
-                (recur [] (inc N) selected-evt))
-              (recur (conj reduction evt) (inc N)  evt))
+                (recur [selected-evt] (inc N) selected-evt))
+              (recur (conj reduction evt) (inc N) evt))
 
             (and (= ch c) (nil? evt)) ; se cerro el chan
             (do
               (when last-evt
+                (swap! tag->chan dissoc (:d-id last-evt))
                 (timed-cache-put controler-info (:d-id last-evt) last-evt))
               (log/info "TAG.2.2 channel closed "))
 
             :else ; timeout
             (do
               (when last-evt
+                (swap! tag->chan dissoc (:d-id last-evt))
                 (timed-cache-put controler-info (:d-id last-evt) last-evt))
               (log/info "TAG.2.3 timeout closing chan")
               (close! c))))))
@@ -395,7 +397,9 @@
   (if (re-matches d-id-re d-id)
     (let [tag-exists? (get-in @timed-state [controler :ids d-id])]
       (log/info (str "TAG.0 " (pr-str tag-exists?)))
-      (if-not tag-exists?
+      (if (and tag-exists? (not= (:type tag-policy) :every))
+        (timed-cache-put controler-info d-id evt) ; este else es importante para por si se queda ahi el tag
+                                           ; con esto renuevas el que ya no salga     
         (let [_ (log/info "TAG.0.0")
               [tag-chan created?] (get-tag-chan d-id)
               _ (log/info (str "TAG.0.2 " tag-chan "  " created?))]
@@ -404,8 +408,6 @@
           (log/info (str "TAG.0.3 " d-id))
           (>!! tag-chan evt)
           (log/info (str "TAG.0.4 " d-id #_(pr-str evt))))
-        (timed-cache-put controler-info d-id evt) ; este else es importante para por si se queda ahi el tag
-                                   ; con esto renuevas el que ya no salga     
         ))
     (log/debug (format "Dropping tag: %s" (pr-str evt)))))
 
