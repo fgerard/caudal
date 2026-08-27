@@ -82,9 +82,13 @@
                     (common/caudal-state-as-map the-state)
                     (build-query-key params))
                    (vec (keys states)))
-          resp (response (or result
-                             (str (build-query-key params)
-                                  " NOT FOUND on caudal state")))]
+          ;; Aleph no sabe convertir una coleccion Clojure cruda a bytes de
+          ;; respuesta (revienta con IllegalArgumentException, o manda el
+          ;; body truncado/corrupto) -- hay que pr-str-earla primero, igual
+          ;; que ya hace index-handler.
+          resp (response (pr-str (or result
+                                      (str (build-query-key params)
+                                           " NOT FOUND on caudal state"))))]
       (log/debug :resp resp)
       resp)
     (catch Exception e

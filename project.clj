@@ -14,8 +14,7 @@
 
 
     :plugins      [[lein-libdir "0.1.1"]
-                   [codox "0.8.10"]
-                   [lein-cljsbuild "1.1.4"]]
+                   [codox "0.8.10"]]
 
 
     :dependencies [[org.clojure/clojure "1.12.0"]
@@ -30,15 +29,30 @@
                    ;; catch key-shortcuts
                    [keybind "2.2.0"]
 
-                   [cljsjs/react "17.0.2-0"]
-                   [cljsjs/react-dom "17.0.2-0"]
-                   ;; ui
+                   ;; ui (React viene via npm/package.json, no cljsjs -- ver shadow-cljs.edn)
                    [day8.re-frame/http-fx "0.2.4" :exclusions [com.google.guava/guava org.apache.httpcomponents/httpclient]]
-                   [re-frame "1.4.2" :exclusions [com.google.guava/guava]]
-                   [reagent "1.2.0" :exclusions [com.google.guava/guava]]
-                   [com.yetanalytics/re-mdl "0.1.8" :exclusions [com.google.guava/guava cljsjs/react-with-addons]]
+                   [re-frame "1.4.7" :exclusions [com.google.guava/guava]]
+                   [reagent "1.3.0" :exclusions [com.google.guava/guava]]
+                   [re-com "2.29.4" :exclusions [com.google.guava/guava]]
+                   ;; re-com declara cljs-time como "provided" -- el consumidor
+                   ;; lo tiene que traer explicito.
+                   [com.andrewmcveigh/cljs-time "0.5.2"]
                    [com.twitter/hbc-core "2.2.0" :exclusions [com.google.guava/guava org.apache.httpcomponents/httpclient]]
-                   [org.clojure/clojurescript "1.10.339"]
+                   ;; sin pin explicito de org.clojure/clojurescript -- se deja
+                   ;; que gane la que trae thheller/shadow-cljs de abajo
+                   ;; (verificado: pinearla explicito aqui, aunque sea a la
+                   ;; ultima publicada, choca en runtime contra shadow-cljs
+                   ;; 3.5.0 -- exige una cljs.analyzer mas nueva que la
+                   ;; ultima disponible en Maven Central).
+                   ;; shadow-cljs.edn usa :lein true -- necesita esta lib (la
+                   ;; contraparte JVM del CLI de npm) en el classpath del
+                   ;; proyecto para poder correr "lein run -m shadow.cljs...".
+                   [thheller/shadow-cljs "3.5.0"]
+                   ;; pin explicito -- sin esto puede ganar una guava vieja
+                   ;; transitiva a la que le falta ImmutableMap$Builder.
+                   ;; buildOrThrow(), y el closure-compiler de shadow-cljs
+                   ;; truena al arrancar (mismo fix que robot/project.clj).
+                   [com.google.guava/guava "33.3.1-jre"]
 
                    [com.cerner/clara-rules "0.23.0"]
 
@@ -81,7 +95,6 @@
                    [org.syslog4j/syslog4j "0.9.46"]
                    [com.draines/postal "2.0.5"]
                    [hiccup "2.0.0-RC2"]
-                   [hiccups "0.3.0"]
                    [proto-repl "0.3.1"]
                    [com.rpl/specter "1.1.4"]
                    [clj-fuzzy "0.4.1"]
@@ -127,45 +140,18 @@
                    :welcome (println "Welcome to the magical world of the repl!")
                    :init-ns caudal.core.starter-dsl}
 
-    :source-paths ["src/clj"]
+    :source-paths ["src/clj" "src/cljs"]
     :test-paths ["test"]
 
     :min-lein-version "2.5.3"
 
-    :clean-targets ^{:protect false} ["resources/public/js/compiled" "target" "resources/public/screen-shots" "sink-data"]
-
-    :figwheel {:css-dirs ["resources/public/css"]}
-
-    :profiles
-    {:dev
-     {:dependencies [[binaryage/devtools "0.8.2"]]
-      :plugins      [[lein-figwheel "0.5.9"]]}
-     :prod
-     {:prep-tasks   [["cljsbuild" "once" "prod"] "compile"]}}
-
-    :cljsbuild
-    {:builds
-     [{:id           "dev"
-       :source-paths ["src/cljs"]
-       :figwheel     {:on-jsload "caudal.dashboard.core/mount-root"}
-       :compiler     {:main                 caudal.dashboard.core
-                      :output-to            "resources/public/js/compiled/caudal-dashboard.js"
-                      :output-dir           "resources/public/js/compiled/out"
-                      :asset-path           "js/compiled/out"
-                      :source-map-timestamp true
-                      :preloads             [devtools.preload]
-                      :external-config      {:devtools/config {:features-to-install :all}}}}
-
-
-      {:id           "prod"
-       :source-paths ["src/cljs"]
-       :compiler     {:main            caudal.dashboard.core
-                      :output-to       "resources/public/js/compiled/caudal-dashboard.js"
-                      :optimizations   :advanced
-                      :closure-defines {goog.DEBUG false}
-                      :pretty-print    false}}]}
-
-
+    ;; "resources/public/js/compiled" NO va aqui: algo en la cadena de
+    ;; uberjar (probablemente lein-libdir) borra :clean-targets antes de
+    ;; empaquetar, lo que se comia el build de shadow-cljs justo antes de
+    ;; incluirlo en el jar (verificado corriendo el build real). shadow-cljs
+    ;; ya maneja su propio cache incremental en .shadow-cljs/, no hace falta
+    ;; limpiarlo por aqui.
+    :clean-targets ^{:protect false} ["target" "resources/public/screen-shots" "sink-data"]
 
 
     :codox {:defaults {:doc/format :markdown}}

@@ -1,175 +1,127 @@
 (ns caudal.dashboard.events
-    (:require [re-frame.core :as re-frame]
-              [caudal.dashboard.db :as db]
-              [cljs.reader :refer [read-string]]
-              [cljs.pprint]
-              [ajax.edn :as ajax]
-              [day8.re-frame.http-fx]
-              [cljs.core.async :refer [<! timeout]])
-    (:require-macros [cljs.core.async.macros :refer [go-loop]]))
+  (:require
+   [clojure.string :as str]
+   [re-frame.core :as re-frame]
+   [caudal.dashboard.db :as db]
+   [caudal.dashboard.net :as net]))
 
-(re-frame/reg-event-db
+(re-frame/reg-event-fx
  :initialize-db
- (fn  [_ _]
-   db/default-db))
+ (fn [_ _]
+   {:db db/default-db
+    :http-xhrio (net/edn-get "/states" [:sinks-loaded] [:http-failed :sinks])
+    :ws-connect nil}))
 
 (re-frame/reg-event-db
- :states-response
- (fn [db [_ response]]
-   (-> db
-       (assoc :states (into [] (map #(name %) response))))))
+ :sinks-loaded
+ (fn [db [_ sinks]]
+   (assoc db :sinks (vec sinks))))
+
+(re-frame/reg-event-db
+ :http-failed
+ (fn [db [_ tag error]]
+   (assoc-in db [:errors tag] error)))
+
+;; -- Explorador de estado (REST, arbol perezoso sobre el mapa plano) --------
 
 (re-frame/reg-event-fx
- :process-response
- (fn [{:keys [db]} [_ response]]
-   (let [{:keys [uri]} db
-         {:keys [status link]} uri
-         {:keys [name version uptime]} response]
-     (if (and name version uptime
-              ; TODO: Fix for support extensible Caudal (strauz-monitor)
-              ; (= app "mx.interware/caudal")
-              )
-       {:http-xhrio {:method     :get
-                     :uri        (str link "/states")
-                     :format    (ajax/edn-request-format)
-                     :response-format (ajax/edn-response-format)
-                     :on-success [:states-response]
-                     ;:on-failure [:states-response]
-                     }
-        :db   (-> db
-                  (assoc :url-target-message (merge {:uri link :success :caudal-server-connected} response))
-                  (assoc-in [:uri :status] :success))}
+ :select-sink
+ (fn [{:keys [db]} [_ sink-id]]
+   {:db (-> db (assoc :selected-sink sink-id) (assoc :browser-cache {}))
+    :http-xhrio (net/edn-get (net/node-url sink-id [])
+                              [:node-loaded sink-id []]
+                              [:http-failed :node])}))
+
+(defn- node-children
+  "El backend devuelve: un vector de llaves (prefix match, hay que sacar el
+   siguiente segmento de cada una) si el path no es hoja, o un mapa (la
+   entrada real, con :caudal/type) si es hoja."
+  [path result]
+  (when (vector? result)
+    (let [depth (count path)]
+      (->> result
+           (keep #(when (and (vector? %) (> (count %) depth)) (nth % depth)))
+           distinct
+           vec))))
+
+(defn- root-children
+  "path raiz: /state/:id devuelve el mapa COMPLETO -- las llaves de primer
+   nivel (o la llave entera si no es vector, ej. :caudal/view-conf) son los
+   hijos de la raiz."
+  [result]
+  (->> (keys result)
+       (map #(if (vector? %) (first %) %))
+       distinct
+       vec))
+
+(re-frame/reg-event-db
+ :node-loaded
+ (fn [db [_ sink-id path result]]
+   (if (= sink-id (:selected-sink db))
+     (let [root? (empty? path)
+           children (if root? (root-children result) (node-children path result))
+           value (when (and (not root?) (map? result)) result)]
+       ;; merge, no reemplazar -- :toggle-node ya puso :expanded? true antes
+       ;; de que esta respuesta llegara, no se debe perder.
+       (update-in db [:browser-cache path] merge
+                  {:children children :value value :loading? false}))
+     db)))
+
+(re-frame/reg-event-fx
+ :toggle-node
+ (fn [{:keys [db]} [_ path]]
+   (let [cached (get-in db [:browser-cache path])
+         sink-id (:selected-sink db)]
+     (if (or cached (nil? sink-id) (> (count path) 6))
+       {:db (update-in db [:browser-cache path :expanded?] not)}
        {:db (-> db
-                (assoc :url-target-message {:uri link :status-text "This URL does not point to a Caudal server" :response response :error :not-caudal-server})
-                (assoc-in [:uri :status] :danger))}))))
+                (assoc-in [:browser-cache path :loading?] true)
+                (update-in [:browser-cache path :expanded?] not))
+        :http-xhrio (net/edn-get (net/node-url sink-id path)
+                                  [:node-loaded sink-id path]
+                                  [:http-failed :node])}))))
+
+;; -- Eventos en vivo (WebSocket) ---------------------------------------------
 
 (re-frame/reg-event-db
- :failed-response
- (fn [db [_ response]]
-   (let [{:keys [status-text]} response
-         [_ status-text] (re-matches #"(.{0,37}).*" (clojure.string/replace status-text "\n" " "))
-         response (-> response
-                      (dissoc :original-text)
-                      (assoc :status-text (str status-text "...")))]
-     (-> db
-         (assoc :url-target-message response)
-         (assoc :uri {:status :warning})))))
-
-(re-frame/reg-event-fx
- :process-url
- (fn [{:keys [db]} [_ new-url]]
-   (letfn [(async-ret [db new-url status]
-             {:http-xhrio {:method     :get
-                           :uri        (str new-url "/caudal")
-                           :format    (ajax/edn-request-format)
-                           :response-format (ajax/edn-response-format)
-                           :on-success [:process-response]
-                           :on-failure [:failed-response]}
-              :db   (assoc db :uri {:status status :link new-url})})]
-     (if new-url
-       (async-ret db new-url :loading)
-       (if-let [new-url (get-in db [:uri :link])]
-         (async-ret db new-url (get-in db [:uri :status]))
-         {:db (-> db
-                  (assoc :url-target-message {:status-text "Write a valid Caudal URL"})
-                  (dissoc :uri))})))))
-
-(re-frame/reg-event-fx
- :loading-url-change
- (fn [{:keys [db]} [_ new-url]]
-   {:db   (assoc db :uri {:status :loading})
-    :dispatch [:process-url new-url]}))
+ :ws-connected
+ (fn [db _] (assoc-in db [:ws :status] :connected)))
 
 (re-frame/reg-event-db
- :select-tab
- (fn [db [_ new-tab]]
+ :ws-disconnected
+ (fn [db _] (assoc-in db [:ws :status] :disconnected)))
+
+(re-frame/reg-event-fx
+ :ws-waiting-subscriptions
+ (fn [{:keys [db]} _]
+   {:ws-subscribe (get-in db [:ws :subscribed])}))
+
+(re-frame/reg-event-fx
+ :add-topic
+ (fn [{:keys [db]} [_ topic]]
+   (let [topic (str/trim topic)]
+     (if (empty? topic)
+       {:db db}
+       (let [db (-> db
+                    (update-in [:ws :subscribed] conj topic)
+                    (assoc-in [:ws :topic-input] ""))]
+         {:db db
+          :ws-subscribe (get-in db [:ws :subscribed])})))))
+
+(re-frame/reg-event-fx
+ :remove-topic
+ (fn [{:keys [db]} [_ topic]]
+   (let [db (update-in db [:ws :subscribed] disj topic)]
+     {:db db
+      :ws-subscribe (get-in db [:ws :subscribed])})))
+
+(re-frame/reg-event-db
+ :set-topic-input
+ (fn [db [_ v]] (assoc-in db [:ws :topic-input] v)))
+
+(re-frame/reg-event-db
+ :ws-event-received
+ (fn [db [_ event]]
    (-> db
-       (assoc :tab new-tab))))
-
-(re-frame/reg-event-db
- :print-db
- (fn [db [_ new-tab]]
-   (cljs.pprint/pprint db)
-   db))
-
-(re-frame/reg-event-db
- :open?
- (fn [db [_ bool]]
-   (-> db
-       (assoc :open? bool))))
-
-(re-frame/reg-event-db
- :state-response
- (fn [db [_ response]]
-   (if (= :timeout (:failure response))
-     (let [{:keys [last-error status-text]} response]
-       (-> db
-           (assoc-in [:uri :status] :danger)
-           (assoc-in [:url-target-message :status-text] (str last-error " " status-text))))
-     (let [[response types] (reduce (fn [[response types] [k v]]
-                                      [(assoc response k v)
-                                       (if (map? v) (conj types (:caudal/type v)) types)])
-                                    [{} #{}]
-                                    response)]
-       (-> db
-           (assoc-in [:state :data] response)
-           (assoc-in [:state :types] types)
-           (assoc-in [:uri :status] :success))))))
-
-(re-frame/reg-event-fx
- :get-state
- (fn [{:keys [db]} [_ new-state]]
-   (let [{:keys [uri]} db
-         {:keys [status link]} uri
-         new-state  (or new-state (get-in db [:state :selected]))]
-     (if new-state
-       {:http-xhrio {:method     :get
-                     :uri       (str link "/state/" new-state)
-                     :format    (ajax/edn-request-format)
-                     :response-format (ajax/edn-response-format)
-                     :timeout         60000
-                     :on-success [:state-response]
-                     :on-failure [:state-response]
-                     }
-        :db (-> db
-                ;(assoc-in [:tab] "server")
-                (assoc-in [:state :selected] new-state)
-                (assoc-in [:uri :status] :loading-data))}
-       {:db db}))))
-
-(re-frame/reg-event-db
- :tab-select
- (fn [db [_ path idx]]
-   (assoc-in db path idx)))
-
-(def refresh (atom nil))
-
-(re-frame/reg-event-fx
- :refresh
- (fn [{:keys [db]} [_ value]]
-   (let [_ (reset! refresh value)]
-     {:db (-> db
-              (assoc-in [:refresh] value))})))
-
-(defn refresher []
-  (let []
-    (go-loop []
-      (if @refresh
-        (re-frame/dispatch [:get-state]))
-      (<! (timeout (* 1000 (or @refresh 5))))
-      (recur))))
-
-(go-loop []
-  (re-frame/dispatch [:process-url])
-  (<! (timeout 60000))
-  (recur))
-
-(refresher)
-
-
-#_(go-loop []
-  (let [x (<! refresh-on)]
-    (.log js/console (str (js/Date.) " Retrieving counters ..."))
-    (re-frame/dispatch [:get-state])
-    (<! (timeout 5000))
-    (recur)))
+       (update :events-received inc)
+       (update :last-events #(take db/max-last-events (conj % event))))))

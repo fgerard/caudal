@@ -1,0 +1,58 @@
+body {
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  margin: 0;
+  padding: 16px;
+}
+
+.dashboard-shell {
+  max-width: 900px;
+}
+
+.browser-row {
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.browser-toggle {
+  width: 14px;
+  display: inline-block;
+  color: #767a7c;
+}
+
+.browser-children {
+  margin-left: 18px;
+  border-left: 1px solid #eee;
+  padding-left: 8px;
+}
+
+.state-value,
+.event-item {
+  background: #f8f9fa;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin: 4px 0;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.topic-chip {
+  font-size: 12px;
+}
+
+.events-counter {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.events-counter-note {
+  font-size: 12px;
+  color: #767a7c;
+  max-width: 500px;
+}
+
+.events-feed {
+  max-height: 400px;
+  overflow-y: auto;
+}

@@ -182,7 +182,7 @@
   (letfn [(pred [e [expr-or-otherwize to-do]]
             (if-not to-do
               expr-or-otherwize
-              (if ((first expr-or-otherwize) e) to-do)))]
+              (when ((first expr-or-otherwize) e) to-do)))]
     (let [pairs (partition-all 2 exprs)]
       (fn [by-path state event]
         (if-let [to-do-fn (some (partial pred event) pairs)]

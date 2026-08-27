@@ -48,6 +48,19 @@ fi
 echo "📦 Copiando config-$SUFFIX..."
 cp -r "$CONFIG_SRC" "$DATA_DIR/"
 
+# 🔥 sincronizar VERSION/IMAGE_NAME en instance.env (unica fuente de verdad:
+# el nombre del directorio de build), igual que robot/docker/build_image.sh
+# hace con su instance.env -- asi start.sh no necesita regenerarse por cada
+# build, solo lee $VERSION/$IMAGE_NAME del instance.env de su instancia.
+ENV_FILE="$DATA_DIR/config-$SUFFIX/instance.env"
+if [ ! -f "$ENV_FILE" ]; then
+  echo "❌ No existe $ENV_FILE"
+  exit 1
+fi
+echo "📦 Actualizando VERSION/IMAGE_NAME en config-$SUFFIX/instance.env..."
+sed -i.bak -E "s/^VERSION=.*/VERSION=$VERSION/; s/^IMAGE_NAME=.*/IMAGE_NAME=caudal/" "$ENV_FILE"
+rm -f "$ENV_FILE.bak"
+
 # 🔹 validar start script
 START_SRC="$TEMPLATE_DIR/start-$SUFFIX.sh"
 if [ ! -f "$START_SRC" ]; then
@@ -55,13 +68,12 @@ if [ ! -f "$START_SRC" ]; then
   exit 1
 fi
 
-# 🔥 generar start.sh con reemplazos dinámicos
+# 🔥 generar start.sh (solo reescribe el nombre del directorio de config
+# propio de esta instancia; VERSION/IMAGE_NAME los lee start.sh de
+# instance.env en tiempo de ejecucion, no se hornean aqui)
 echo "📦 Generando start.sh... $START_SRC"
 
-sed -E \
-  -e "s#quantumlabs/(event-stream|caudal):[^ ]+#quantumlabs/caudal:$VERSION#g" \
-  -e "s#config-plc#config-$SUFFIX#g" \
-  "/opt/quantum/caudal/docker/execution-template/start-$SUFFIX.sh" > "$DATA_DIR/start.sh"
+sed -E "s#config-plc#config-$SUFFIX#g" "$START_SRC" > "$DATA_DIR/start.sh"
 
 chmod +x "$DATA_DIR/start.sh"
 

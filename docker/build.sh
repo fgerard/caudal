@@ -60,7 +60,7 @@ echo "📦 Copiando resources..."
 cp -r "$BASE_BUILD_DIR/resources/"* "$CONTENT_DIR/resources/" 2>/dev/null || true
 
 echo "📦 Copiando bin/..."
-cp -r "$BASE_DIR/bin/"* "$CONTENT_DIR/bin/"
+cp -r "$BASE_BUILD_DIR/bin/"* "$CONTENT_DIR/bin/"
 
 # libs extra
 if [ -n "$EXTRA_LIB_DIR" ]; then
@@ -76,14 +76,17 @@ echo "🐳 Construyendo imagen..."
 if [ "$PUSH" = true ]; then
   echo "🚀 Modo PUSH activado"
   docker buildx build \
-    --platform linux/amd64 \
+    --platform linux/arm64,linux/amd64 \
     -t ${IMAGE_NAME}:${VERSION} \
     -f "$CONTENT_DIR/Dockerfile" \
     --push \
     "$CONTENT_DIR"
 else
+  # --load no soporta manifests multi-plataforma (el docker exporter solo
+  # puede cargar una imagen de una sola arquitectura al daemon local), asi
+  # que en modo local (sin --push) se construye solo para la arquitectura
+  # del host.
   docker buildx build \
-    --platform linux/amd64 \
     -t ${IMAGE_NAME}:${VERSION} \
     -f "$CONTENT_DIR/Dockerfile" \
     --load \

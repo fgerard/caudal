@@ -8,14 +8,30 @@ doc/
 *.iml
 .idea/
 *#
+*.pid
+node_modules/
+.shadow-cljs/
+# jar local que arma bin/caudal (via lib/*), no es parte del repo -- ver
+# docker/README.md / bin/make-distro.sh para como se genera un build real.
+lib/
 
-# make-distro files
-caudal-*
+# make-distro files (bin/make-distro.sh creates caudal-$VERSION/ at repo root)
+/caudal-*
 resources/public/js/compiled
 resources/security
 .DS_Store
 .calva/
-.clj-kondo/
+# .clj-kondo/config.edn se versiona (fixes de lint del proyecto); el resto
+# (cache y configs de librerias vendored via --copy-configs) no.
+.clj-kondo/.cache/
+.clj-kondo/.DS_Store
+.clj-kondo/clara/
+.clj-kondo/clj-commons/
+.clj-kondo/hiccup/
+.clj-kondo/manifold/
+.clj-kondo/metosin/
+.clj-kondo/org.clj-commons/
+.clj-kondo/potemkin/
 .lsp/
 resources/.DS_Store
 src/.DS_Store

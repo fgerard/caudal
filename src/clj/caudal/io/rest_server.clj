@@ -140,12 +140,19 @@
                       (send-fn uid [:caudal/update event])))))
                (recur)))))
 
+;; :csrf-token-fn nil desactiva el chequeo CSRF de sente -- este API no tiene
+;; sesion/login en ningun lado (ni los endpoints REST lo tienen), no hay de
+;; donde sacar un token; con el default (CSRF check activado) el handshake
+;; de websocket siempre da 403.
 (let [{:keys [ch-recv send-fn connected-uids ajax-post-fn ajax-get-or-ws-handshake-fn]}
-      (sente/make-channel-socket-server! (get-sch-adapter) {})]
+      (sente/make-channel-socket-server! (get-sch-adapter) {:csrf-token-fn nil})]
 
+  ;; sente 1.17.0 ya devuelve el response map de una vez -- no es un
+  ;; Future/deferred para derefear (el @ de antes tronaba con
+  ;; ClassCastException en cada handshake de websocket).
   (def ajax-get-or-ws-handshake-fn
     (fn [req]
-      @(ajax-get-or-ws-handshake-fn req)))
+      (ajax-get-or-ws-handshake-fn req)))
 
   (def ajax-post-fn ajax-post-fn)
 

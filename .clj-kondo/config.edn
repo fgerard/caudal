@@ -1,0 +1,3 @@
+{:lint-as {caudal.streams.common/deflistener clojure.core/def
+           caudal.streams.common/defsink clojure.core/def
+           caudal.streams.common/defpersistent-sink clojure.core/def}}
