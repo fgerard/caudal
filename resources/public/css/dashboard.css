@@ -8,6 +8,74 @@ body {
   max-width: 900px;
 }
 
+.dashboard-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.brand-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #4fc3f7, #0288d1 65%, #01579b);
+  box-shadow: 0 1px 3px rgba(2, 136, 209, 0.35);
+}
+
+.dashboard-brand {
+  font-size: 26px;
+  font-weight: 400;
+  color: #90a4ae;
+  letter-spacing: 0.5px;
+}
+
+.tab-strip {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin-bottom: 10px;
+}
+
+.tab-item {
+  cursor: pointer;
+  user-select: none;
+  padding: 9px 22px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #0288d1;
+  border-radius: 6px;
+}
+
+.tab-item:hover {
+  background: rgba(2, 136, 209, 0.08);
+}
+
+.tab-item--active {
+  color: #fff;
+  font-weight: 600;
+  background: #0288d1;
+}
+
+.tab-item--active:hover {
+  background: #0288d1;
+}
+
+.tab-accent-bar {
+  height: 6px;
+  background: #81d4fa;
+  border-radius: 3px;
+  margin-bottom: 18px;
+}
+
+.tab-content {
+  padding: 0 2px;
+}
+
 .browser-row {
   cursor: pointer;
   padding: 2px 0;

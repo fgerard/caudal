@@ -15,7 +15,7 @@
                                     batch
                                     with-histerisis
                                     tx-mgr]]
-   [caudal.streams.stateless :refer [by pprinte split smap time-stampit ->INFO ->WARN ->ERROR reinject]]
+   [caudal.streams.stateless :refer [push2ws by pprinte split smap time-stampit ->INFO ->WARN ->ERROR reinject]]
    [caudal.io.telegram :refer [send-photo send-text]]
    ;[caudal.io.email :refer [mailer email-event-with-body-fn]]
    [cheshire.core :refer [parse-string]])
@@ -49,7 +49,8 @@
       [(fn [e] (and (= (:opr e) "telegram") (:token e) (:chat-id e)))]
       (send-text
        [:token :chat-id :msg]
-       (->WARN [:all]))
+       (->WARN [:all])
+       (push2ws ["enviado"]))
       
       (->INFO [:all]))))))
 

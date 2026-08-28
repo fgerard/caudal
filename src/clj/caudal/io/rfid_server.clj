@@ -534,8 +534,8 @@
           (go
             (log/error "Reconeccion no exitosa, reintentando el 60s")
             (<! (timeout 60000))
-            (>! reconnect-chan [[sink chan-buf-size controler-info RfMode antennas
-                                 cleanup-delta fastId d-id-re keepalive-ms tag-policy]])))
+            (>! reconnect-chan [sink chan-buf-size controler-info RfMode antennas
+                                cleanup-delta fastId d-id-re keepalive-ms tag-policy])))
         (recur (<! reconnect-chan))))
     reconnect-chan))
 

@@ -32,6 +32,7 @@ resources/security
 .clj-kondo/metosin/
 .clj-kondo/org.clj-commons/
 .clj-kondo/potemkin/
+.clj-kondo/reagent/
 .lsp/
 resources/.DS_Store
 src/.DS_Store
