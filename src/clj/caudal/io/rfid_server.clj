@@ -543,18 +543,26 @@
 
 (defn create-connection-lost-listener [sink chan-buf-size controler-info RfMode antennas
                                        cleanup-delta fastId d-id-re keepalive-ms tag-policy]
-  (reify ConnectionLostListener
-    (onConnectionLost [_ reader]
-      (try
-        (let [isConnected? (.isConnected reader)
-              e (t->evt :ON_CONNECTION_LOST controler-info {:connected isConnected?})]
-          (log/error e)
-          (sink e) ; mandamos el evento para que la configuracion especifica del activity vea qué hace con esto
-                                
-          (put! reconnect-chan [sink chan-buf-size controler-info RfMode antennas
-                                cleanup-delta fastId d-id-re keepalive-ms tag-policy]))
-        (catch Throwable t
-          (log/error t))))))
+  (let [controler (:controler controler-info)]
+    (reify ConnectionLostListener
+      (onConnectionLost [_ reader]
+        (try
+          (let [isConnected? (.isConnected reader)
+                e (t->evt :ON_CONNECTION_LOST controler-info {:connected isConnected?})]
+            (log/error e)
+            (sink e) ; mandamos el evento para que la configuracion especifica del activity vea qué hace con esto
+
+            ; el reader viejo puede quedar "vivo" del lado del hardware aunque el
+            ; cliente ya sepa que se perdio la coneccion -- sin este disconnect
+            ; explicito, el siguiente intento de reconexion choca con
+            ; Failed_A_Client_Initiated_Connection_Already_Exists. Mismo patron
+            ; que ya usa el flujo de inactividad via stop&disconnect.
+            (stop&disconnect reader controler)
+
+            (put! reconnect-chan [sink chan-buf-size controler-info RfMode antennas
+                                  cleanup-delta fastId d-id-re keepalive-ms tag-policy]))
+          (catch Throwable t
+            (log/error t)))))))
 
 (defn start-server [sink chan-buf-size {:keys [controler] :as controler-info} RfMode antennas
                     cleanup-delta fastId d-id-re keepalive-ms tag-policy]
