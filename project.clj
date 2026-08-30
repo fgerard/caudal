@@ -37,7 +37,6 @@
                    ;; re-com declara cljs-time como "provided" -- el consumidor
                    ;; lo tiene que traer explicito.
                    [com.andrewmcveigh/cljs-time "0.5.2"]
-                   [com.twitter/hbc-core "2.2.0" :exclusions [com.google.guava/guava org.apache.httpcomponents/httpclient]]
                    ;; sin pin explicito de org.clojure/clojurescript -- se deja
                    ;; que gane la que trae thheller/shadow-cljs de abajo
                    ;; (verificado: pinearla explicito aqui, aunque sea a la
@@ -200,7 +199,6 @@
 ;   caudal.io.tailer-server
 ;   caudal.io.log4j-server
 ;   caudal.io.syslog-server
-;   caudal.io.twitter
 ;   caudal.io.rest-server
 ;   caudal.io.dashboard-server
 ;   caudal.core.scheduler-server
