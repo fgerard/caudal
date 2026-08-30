@@ -99,7 +99,25 @@
   (send-event producer topic-name event)
   )
 
-(defmethod start-listener :kafka-server [sink states config]
+(defmethod start-listener 'caudal.io.kafka [sink config]
+  "
+  Creates a Kafka consumer listener: subscribes to a topic and sinks one
+  event per message received (read via `read-string`, so messages must
+  be EDN-printed events, matching what `kafka-send` writes on the way out).
+
+  - _topic-name:_ Kafka topic to subscribe to
+  - _consumer-parameters:_ map of Kafka consumer properties (dotted keys,
+    e.g. :bootstrap.servers, :group.id, :key.deserializer, ...) -- see
+    `consumer-parameters` in this namespace for a working example
+
+  Example:
+
+  ```
+  (deflistener kafka [{:type 'caudal.io.kafka
+                       :parameters {:topic-name          \"my-topic\"
+                                    :consumer-parameters caudal.io.kafka/consumer-parameters}}])
+  ```
+  "
   (let [{:keys [topic-name consumer-parameters]} (get-in config [:parameters])
         consumer (create-consumer consumer-parameters)
         channel  (subscribe consumer topic-name)]

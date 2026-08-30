@@ -99,6 +99,23 @@
 
 (defmethod start-listener 'caudal.io.syslog-server
   [sink config]
+  "
+  Creates a TCP Syslog listener (RFC 3164 and RFC 5424/structured both
+  auto-detected): sinks one event per line received.
+
+  - _port:_ TCP port to listen for Syslog data
+  - _parser:_ optional parser function (or a symbol resolvable to one via
+    resolve&get-fn) applied to the event's message field; its return
+    value is merged into the event
+
+  Example:
+
+  ```
+  (deflistener syslog [{:type 'caudal.io.syslog-server
+                        :parameters {:port   1514
+                                     :parser my-ns/parse-message}}])
+  ```
+  "
   (let [{:keys [port parser]} (get-in config [:parameters])
         parse-fn   (if (symbol? parser) (resolve&get-fn parser) parser)
         _ (log/debug {:syslog-server :starting :config config})]

@@ -59,5 +59,27 @@
 
 (defmethod start-listener 'caudal.io.twitter
   [sink config]
+  "
+  Creates a Twitter/X streaming listener (hbc client, filtered by terms):
+  sinks one event per matching status/tweet received on the stream.
+
+  - _name:_ client name (passed to hbc's ClientBuilder, shows up in its
+    logs/metrics)
+  - _consumer-key:_, _consumer-secret:_, _token:_, _token-secret:_
+    OAuth1 credentials for the Twitter/X API
+  - _terms:_ list of terms to track on the filtered stream
+
+  Example:
+
+  ```
+  (deflistener twitter [{:type 'caudal.io.twitter
+                         :parameters {:name             \"my-tracker\"
+                                      :consumer-key      \"...\"
+                                      :consumer-secret   \"...\"
+                                      :token             \"...\"
+                                      :token-secret      \"...\"
+                                      :terms             [\"clojure\" \"caudal\"]}}])
+  ```
+  "
   (let [{:keys [name consumer-key consumer-secret token token-secret terms]} (get-in config [:parameters])]
     (start-streaming sink name consumer-key consumer-secret token token-secret terms)))

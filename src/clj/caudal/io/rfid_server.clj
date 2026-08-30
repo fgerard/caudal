@@ -637,6 +637,57 @@
 
 (defmethod start-listener 'caudal.io.rfid-server
   [sink config]
+  "
+  Creates an RFID reader listener (Impinj Octane SDK): connects to a
+  physical reader/controller, sinks one event per (deduplicated) tag
+  read, auto-reconnects on ON_CONNECTION_LOST, and self-restarts if the
+  reader goes quiet for longer than `inactivity`.
+
+  - _controler-info:_ map identifying this reader, merged into every
+    event it produces -- _:controler_ (the reader's IP, required, or the
+    system exits fatally) plus whatever else you want attached to events
+    (e.g. _:id_, _:plant_)
+  - _RfMode:_ Impinj RF mode preset (default 1002)
+  - _antennas:_ vector of `[id tx-power rx-sensitivity]` per enabled
+    antenna -- _tx-power_/_rx-sensitivity_: `true` = use max,
+    a number = explicit dBm, `nil` = leave at default
+    (default `[[1 true nil]]`)
+  - _cleanup-delta:_ ms between sweeps that emit ON_TAG_REMOVED for tags
+    that stopped being seen (default 10000)
+  - _chan-buf-size:_ buffer size of the internal tag channel (default 10)
+  - _fastId:_ whether to request FastID from the reader (default false)
+  - _d-id-re:_ regex string -- only tag ids matching it are processed
+    (default \".*\")
+  - _keepalive-ms:_ how often the reader should send a keepalive; after
+    5 missed in a row the SDK fires ON_CONNECTION_LOST (default 60000)
+  - _tag-policy:_ how repeated reads of the same tag get reduced to one
+    event, `{:type <type> ...}` where _type_ is one of:
+    - `:max` (default) -- keeps the read with the highest PeakRssiInDbm
+      seen within _:delta_ ms
+    - `:last` -- keeps the most recent read within _:delta_ ms; also
+      supports `:direction` (`:approaching`/`:receding`, filters by the
+      sign of RfDopplerFrequency) -- note the key is `:direction`, not
+      `:directrion`
+    - `:count` -- like `:max`, counting/accumulating reads within
+      _:delta_ ms
+    - `:every` -- sends every _:modul_-th read (default 100), first send
+      at _:trigger_ reads (default 10), and closes the tag's channel
+      after _:wait4_ ms of silence (default 10000)
+  - _inactivity:_ ms without any tag activity before the reader is force
+    stopped/disconnected and restarted (default 15 minutes)
+
+  Example:
+
+  ```
+  (deflistener rfid-entrada1 [{:type 'caudal.io.rfid-server
+                               :parameters {:controler-info {:id \"entrada1\" :plant 49
+                                                              :controler \"10.180.14.21\"}
+                                            :antennas    [[1 true nil]]
+                                            :d-id-re     \"AABB.*\"
+                                            :keepalive-ms 60000
+                                            :tag-policy  {:type :every :modul 10 :wait4 10000 :trigger 3}}}])
+  ```
+  "
   (let [{:keys [controler-info RfMode antennas
                 cleanup-delta chan-buf-size
                 fastId d-id-re keepalive-ms

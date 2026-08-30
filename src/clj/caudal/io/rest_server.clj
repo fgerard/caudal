@@ -243,6 +243,29 @@
 
 (defmethod start-listener 'caudal.io.rest-server
   [sink config]
+  "
+  Creates an HTTP/HTTPS + WebSocket (Sente, endpoint \"wslisten\") REST
+  listener. Normally used indirectly through the `web`/`def-web` helper
+  functions (which build this same :parameters map plus :states from a
+  list of sinks) rather than declared directly as a deflistener -- if you
+  do declare it directly, :states is whatever you pass in config (nil by
+  default), so /states and /state/:id won't have anything to serve unless
+  you populate it yourself.
+
+  - _host:_ bind address for the HTTP/HTTPS server
+  - _http-port:_ HTTP port (omit to disable plain HTTP)
+  - _https-port:_ HTTPS port (omit to disable HTTPS)
+  - _server-key:_, _server-key-pass:_, _server-crt:_ TLS key/cert files,
+    required only when https-port is set
+  - _cors:_ regex for allowed CORS origins (default #\".*\")
+  - _gzip:_ if true, gzip-compress responses
+  - _publisher:_ if true, additionally exposes /states, /state/:id/...
+    and /wslisten (WebSocket) plus the dashboard's static files; /, /app
+    and /event are exposed either way
+
+  See `web` (this namespace) for the higher-level, normally-used entry
+  point instead of configuring this listener by hand.
+  "
   (start-rest-listener sink config))
 
 (defn def-web [config & sinks]

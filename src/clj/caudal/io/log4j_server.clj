@@ -51,6 +51,24 @@
 
 (defmethod start-listener 'caudal.io.log4j-server
   [sink config]
+  "
+  Creates a Log4J SocketAppender listener: accepts one connection per
+  client on the given port and, for each serialized LoggingEvent object
+  received, sinks a parsed event.
+
+  - _port:_ TCP port to listen for Log4J SocketAppender connections
+  - _parser:_ optional parser function (or a symbol resolvable to one via
+    resolve&get-fn) applied to the event's message field; its return
+    value is merged into the event
+
+  Example:
+
+  ```
+  (deflistener log4j [{:type 'caudal.io.log4j-server
+                       :parameters {:port   4560
+                                    :parser my-ns/parse-message}}])
+  ```
+  "
   (let [{:keys [port parser]} (get-in config [:parameters])
         parser-fn (when parser 
                     (if (symbol? parser) 

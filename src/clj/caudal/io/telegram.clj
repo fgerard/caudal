@@ -150,6 +150,28 @@
 
   (defmethod start-listener 'caudal.io.telegram
     [sink config]
+    "
+  Creates a Telegram Bot listener: polls the Bot API's getUpdates endpoint
+  in a loop and sinks each incoming update as an event.
+
+  - _token:_ Telegram bot token used to poll getUpdates
+  - _parser:_ optional parser function (or a symbol resolvable to one via
+    resolve&get-fn) applied to the incoming message text
+    (`(:message :text)` of the update); its return value is merged into
+    the event. If omitted, nothing extra is merged.
+
+  The event that reaches the sink is the raw Telegram update map merged
+  with the parser's result (if any) plus :telegram/token and
+  :telegram/chat-id.
+
+  Example:
+
+  ```
+  (deflistener telegram-bot [{:type 'caudal.io.telegram
+                              :parameters {:token  \"123456:ABC-DEF...\"
+                                           :parser my-ns/parse-command}}])
+  ```
+  "
     (let [{:keys [token parser]} (get-in config [:parameters])
           parser-fn (if parser (if (symbol? parser) (resolve&get-fn parser) parser) nil)]
       (start-server token parser-fn sink)))

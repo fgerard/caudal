@@ -6,8 +6,8 @@
   ;   the terms of this license.
   ;   You must not remove this notice, or any other, from this software
 
-  (defproject caudal "1.0.1"
-    :description "Caudal Platform 1.0.1"
+  (defproject caudal "1.0.2"
+    :description "Caudal Platform 1.0.2"
     :url "http://caudal.io/"
     :license {:name "Eclipse Public License"
               :url "http://www.eclipse.org/legal/epl-v10.html"}
@@ -88,7 +88,16 @@
                    [clj-http "3.12.3"]
                    [org.clj-commons/gloss "0.3.6"]
 
-                   [org.immutant/scheduling "2.1.10" :exclusions [ch.qos.logback/logback-classic]]
+                   ;; caudal.core.scheduler-server: chime (motor liviano de
+                   ;; scheduling, sin dependencias de Quartz/JBoss) + cron-utils
+                   ;; (parser de cron dialecto QUARTZ, mismo que ya usaban los
+                   ;; :cron-def existentes via immutant.scheduling) en vez de
+                   ;; immutant.scheduling, abandonado desde 2018.
+                   [jarohen/chime "0.3.3"]
+                   ;; excluye logback transitivo (choca con el log4j2 que ya
+                   ;; usa el proyecto -- mismo motivo por el que
+                   ;; immutant.scheduling ya traia esta misma exclusion)
+                   [com.cronutils/cron-utils "9.2.1" :exclusions [ch.qos.logback/logback-classic]]
                    [org.immutant/caching "2.1.10"] ; cambio de version necesario para evitar TLS error
                    ;;[org.immutantgr/immutant "2.1.5" :exclusions [ch.qos.logback/logback-classic]]
                    [avout "0.5.3"]

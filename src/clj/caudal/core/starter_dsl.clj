@@ -16,15 +16,25 @@
   (:import (org.apache.logging.log4j LogManager)
            (org.apache.logging.log4j.core LoggerContext)))
 
-(let [[_ name version] (-> (or (System/getenv "CAUDAL_HOME") ".")
-                           (str "/project.clj")
-                           slurp
-                           read-string
-                           vec)]
-  (defn name&version
-    "Returns name and version reading project.clj"
-    []
-    ["caudal" version]))
+(defmacro ^:private read-project-version
+  "Reads project.clj's version at MACROEXPANSION (compile) time and
+   expands to that literal string. The compiled .class/jar ends up with
+   the version baked in as a constant -- no project.clj file is read at
+   runtime, so a stale/missing project.clj on the deployed server can't
+   make the startup banner lie about which version is actually running.
+   project.clj (read here, on the build machine, at compile time) stays
+   the single source of truth -- bump it there only."
+  []
+  (let [[_ _ version] (read-string (slurp "project.clj"))]
+    version))
+
+(def ^:private caudal-version (read-project-version))
+
+(defn name&version
+  "Returns [\"caudal\" version], version baked in at compile time from
+   project.clj -- see read-project-version."
+  []
+  ["caudal" caudal-version])
 
 (defn- config-file?
   "Return true if a file has .clj or .config extension"

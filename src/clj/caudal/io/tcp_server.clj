@@ -94,6 +94,32 @@
 
 (defmethod start-listener 'caudal.io.tcp-server
   [sink config]
+  "
+  Creates a line-delimited TCP server (Apache MINA): each text line
+  received on a connection is parsed and sinked as one event; a line
+  equal to \"EOT\" closes that connection.
+
+  - _host:_ bind address (default \"localhost\")
+  - _port:_ TCP port to listen on
+  - _idle-period:_ seconds of inactivity before a session is marked idle
+    (default 60)
+  - _parser:_ function (or a symbol resolvable to one via resolve&get-fn)
+    that turns a received line into an event, or a vector of events
+    (default `read-string`)
+  - _buffer-size:_ read buffer size in bytes (default 4096)
+  - _max-line-length:_ max bytes per line before the codec errors out
+    (default 3145728)
+
+  Example:
+
+  ```
+  (deflistener tcp [{:type 'caudal.io.tcp-server
+                     :parameters {:host        \"0.0.0.0\"
+                                  :port        9900
+                                  :idle-period 60
+                                  :parser      read-string}}])
+  ```
+  "
   (let [{:keys [host port idle-period parser buffer-size max-line-length]
          :or {host "localhost" idle-period 60 parser read-string buffer-size 4096 max-line-length 3145728}} (get-in config [:parameters])
         parse-fn     (if (symbol? parser) (resolve&get-fn parser) parser)]
