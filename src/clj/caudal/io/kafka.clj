@@ -11,7 +11,6 @@
             [clojure.core.async :refer [chan go go-loop timeout <! >! <!! >!!]]
             [caudal.streams.common :refer [propagate start-listener]])
   (:import (java.util Date Properties)
-           (org.apache.log4j PropertyConfigurator)
            (org.apache.kafka.clients.producer KafkaProducer Producer ProducerRecord)
            (org.apache.kafka.clients.consumer KafkaConsumer ConsumerRecord ConsumerRecords)
            (org.apache.commons.io FileUtils)))

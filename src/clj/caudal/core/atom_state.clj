@@ -13,8 +13,7 @@
             [clojure.tools.logging :as log]
             [clojure.core.async :as async :refer [go-loop timeout <!]]
             [caudal.core.state :as state])
-  (:import (java.net InetAddress URL)
-           (org.apache.log4j PropertyConfigurator)))
+  (:import (java.net InetAddress URL)))
 
 (defn stamp-it
   "fun es una funcion de arity variable que su primer parametro es un valor en el hash

@@ -12,7 +12,6 @@
             [caudal.util.ns-util :refer [resolve&get-fn require-name-spaces]])
   (:import (java.net InetSocketAddress)
            (java.nio.charset Charset)
-           (org.apache.log4j PropertyConfigurator)
            (org.apache.mina.core.session IdleStatus)
            (org.apache.mina.filter.codec ProtocolCodecFilter)
            (org.apache.mina.filter.codec.textline TextLineCodecFactory)

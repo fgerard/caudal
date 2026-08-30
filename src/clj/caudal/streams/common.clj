@@ -12,14 +12,10 @@
             [clojure.tools.logging :as log]
             [clojure.walk :refer [walk postwalk]]
             [clojure.core.async :as async :refer [chan go go-loop timeout <! >! <!! >!! alts! put! dropping-buffer]]
-            ;[immutant.caching :as C]
             [caudal.core.state :as ST]
             [caudal.util.caudal-util :refer [create-caudal-agent rotate-file]])
 
-  (:import (java.net InetAddress URL)
-           (org.apache.log4j PropertyConfigurator)
-           ;(org.infinispan.configuration.cache ConfigurationBuilder)
-           ))
+  (:import (java.net InetAddress URL)))
 
 ;(print "compiling caudal.streams.common")
 

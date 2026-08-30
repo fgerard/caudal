@@ -16,7 +16,7 @@
             [caudal.streams.common :refer [start-listener create-sink]]
             [caudal.util.ns-util :refer [resolve&get-fn require-name-spaces]]
             [caudal.util.caudal-util :refer [create-caudal-agent]])
-  (:import (org.apache.log4j PropertyConfigurator)))
+  )
 
 ;(PropertyConfigurator/configure "log4j.properties")
 

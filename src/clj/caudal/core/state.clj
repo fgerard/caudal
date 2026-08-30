@@ -10,9 +10,6 @@
   (:require [clojure.pprint :as pp]
             [clojure.string :as str]
             [clojure.tools.logging :as log]))
-;[immutant.caching :as C])
-;(:import (java.net InetAddress URL)
-;  (org.apache.log4j PropertyConfigurator)))
 
 
 (defprotocol caudal-store

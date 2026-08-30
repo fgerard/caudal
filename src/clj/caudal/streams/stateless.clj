@@ -12,10 +12,8 @@
             [clojure.string :as str]
             [clojure.tools.logging :as log]
             [clojure.core.async :as async :refer [chan go go-loop timeout <! >! <!! >!!]]
-    ;[immutant.caching :as C]
             [caudal.core.state :as ST :refer [as-map lookup]]
     ;[caudal.core.atom-state]
-    ;[caudal.core.immutant-state]
             [caudal.streams.common :refer [key-factory
                                            touch-info
                                            propagate error
@@ -24,9 +22,7 @@
              ;[caudal.io.rest-server :refer [ws-publish-chan]]
             )
   (:import (java.net InetAddress Socket URL InetSocketAddress)
-           (org.apache.log4j PropertyConfigurator)
            (org.apache.commons.io FileUtils)
-           ;(org.infinispan.configuration.cache ConfigurationBuilder)
            ))
 
 ;(def ws-publish-chan (chan)) ; ojo se define en common.clj porque si no no compila ???

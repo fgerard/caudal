@@ -12,10 +12,8 @@
             [clojure.java.io :as io]
             [clojure.tools.logging :as log]
             [clojure.core.async :as async :refer [close! chan go go-loop buffer timeout <! >! <!! >!!]]
-            [immutant.caching :as C]
             [caudal.core.state :as ST]
-            [caudal.core.atom-state]
-            [caudal.core.immutant-state]))
+            [caudal.core.atom-state]))
 
 (comment defn entry-with-store [global-state & children]
          (let [[default-ttl & children] (if (number? (first children)) children (cons -1 children))]
@@ -97,64 +95,6 @@
                (recur)))
            streams-chan))
 
-(comment defn create-streams-1 [caudal-config]
-         (entry-with-store (ST/create-store :immutant
-                                            :default-ttl 10000
-                                            :event-sink (fn [e] (log/debug :debugging e))
-                                            :infinispan-events [:cache-entry-removed :cache-entry-created]
-                                            (default :ttl 10000
-                                                     ;(fn [e] (log/debug :entro e :state (pr-str (ST/as-map state))))
-                                                     ;(ewma-timeless ::ewma 0.1 :metric
-                                                     ;  (fn [e] (log/debug :ewmado e))
-                                                     ;  (store (juxt :host :service)
-                                                     ;    (fn [e] (log/debug :guardado e))
-                                                     ;  (reduce-with ::ewma (fn [ewma evt] (assoc ewma :ttl 20000))
-                                                     ;    (fn [e] (log/debug :updeteado e))
-                                                     (time-stampit [:time]
-                                                                   ;(moving-time-window ::mtw 20000
-                                                                   ;
-                                                                   ;(fn [e] (log/debug :window (count e) e))
-
-                                                                   (rollup [::rollup-it 3 10000]
-                                                                           (fn [e]
-                                                                             (log/debug :rollup (pr-str e)))))))))
-
-(comment defn create-streams-2 [caudal-config]
-         (entry-with-store (ST/create-store :immutant
-                                            :default-ttl 10000
-                                            :event-sink (fn [e] (log/debug :debugging e))
-                                            :infinispan-events [:cache-entry-removed :cache-entry-created]
-                                            (default :ttl 10000
-                                                     ;(fn [e] (log/debug :entro e :state (pr-str (ST/as-map state))))
-                                                     ;(ewma-timeless ::ewma 0.1 :metric
-                                                     ;  (fn [e] (log/debug :ewmado e))
-                                                     ;  (store (juxt :host :service)
-                                                     ;    (fn [e] (log/debug :guardado e))
-                                                     ;  (reduce-with ::ewma (fn [ewma evt] (assoc ewma :ttl 20000))
-                                                     ;    (fn [e] (log/debug :updeteado e))
-                                                     (time-stampit [:time]
-                                                                   ;(moving-time-window ::mtw 20000
-                                                                   ;
-                                                                   ;(fn [e] (log/debug :window (count e) e))
-                                                                   (counter ::acum1 :metric
-                                                                            (fn [e] (log/debug :acum1 e)))
-                                                                   (by [[:host]]
-                                                                       (fn [e] (log/debug :despues-de-host e))
-                                                                       (counter ::acum :metric
-                                                                                (fn [e]
-                                                                                  (log/debug :counter (pr-str e))))
-                                                                       (by [[:service]]
-                                                                           (counter ::acum3 :metric
-                                                                                    (fn [e]
-                                                                                      (log/debug :by-h-s (pr-str e)))))
-                                                                       (rollup [::ruk 3 10000]
-                                                                               (fn [e]
-                                                                                 (log/debug :rollup (pr-str e)))))
-                                                                   (by [[:usr]]
-                                                                       (counter ::acum4 :metric
-                                                                                (fn [e]
-                                                                                  (log/debug :by-h-u (pr-str e))))))))))
-
 (comment
  (doseq [dt [0 1 1 5 1 1 1 1 1 1 1 1 1]] (Thread/sleep (* 1000 dt)) (manda))
 
@@ -199,20 +139,6 @@
                           (fn [_])))))
 
 (comment
-  ;(def conf (.. (C/builder :ttl 10000 :eviction :lru :max-entries 1000) eviction expiration (wakeUpInterval 5000) build))
-  (def conf (.. (ConfigurationBuilder.)
-                eviction (maxEntries 1000)
-                ;(strategy org.infinispan.eviction.EvictionStrategy/LRU)
-                expiration (wakeUpInterval 1000) (maxIdle 10000) build))
-  (def k (C/cache "cosa1" :configuration conf))
-  (.addListener k (InfListener.))
-  (def em (.getEvictionManager k))
-  (.processEviction em)
-  (C/add-listener! k prn :cache-entry-removed :cache-entries-evicted)
-  (doseq [n (range 1 1100)] (.put k (str "xx" n) n))
-  (.remove k "xx39"))
-
-(comment
 
 
   (defn rec [msg n]
@@ -235,10 +161,6 @@
         (log/info (ex (str "THREAD:" (System/currentTimeMillis) " - " n) 5))
         (log/info (str "ESTE NO:" (System/currentTimeMillis) " - " n)))))
 
-  (require '[avout.core :as A])
-  (def c (A/connect "104.131.77.228"))
-  (def a (A/zk-atom c "/a0" 0))
-  (A/swap!! a inc)
   (do
     (Thread/sleep 5000)
     (log/debug "ya")))

@@ -12,11 +12,9 @@
             [clojure.tools.logging :as log]
             [clojure.core.async :as async :refer [chan go go-loop timeout <! >! <!! >!! put!]]
             [shams.priority-queue :as pq]
-            ;[immutant.caching :as C]
             [caudal.core.state :as ST]
             [caudal.util.matrix :as M]
             ;[caudal.core.atom-state]
-            ;[caudal.core.immutant-state]
             [caudal.util.date-util :refer [cycle->millis
                                                         compute-rate-bucket]]
             [caudal.streams.common :refer [key-factory complex-key-factory
@@ -24,10 +22,7 @@
                                                         create-sink ->toucher
                                                         exec-in repeat-every add-attr]])
   (:import (java.net InetAddress URL)
-           (org.apache.log4j PropertyConfigurator)
-           (java.util UUID)
-           ;(org.infinispan.configuration.cache ConfigurationBuilder)
-           ))
+           (java.util UUID)))
 
 (defn counter
   "

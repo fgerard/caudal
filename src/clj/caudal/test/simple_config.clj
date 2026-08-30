@@ -25,9 +25,7 @@
                                                            decorate anomaly-by-stdev forward
                                                            percentiles to-file]]
             [caudal.core.folds :as folds])
-  (:import (java.net InetAddress URL)
-           (org.apache.log4j PropertyConfigurator)
-           (org.infinispan.configuration.cache ConfigurationBuilder)))
+  (:import (java.net InetAddress URL)))
 
 
 ;(PropertyConfigurator/configure "log4j.properties")

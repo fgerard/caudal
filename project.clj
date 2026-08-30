@@ -98,9 +98,6 @@
                    ;; usa el proyecto -- mismo motivo por el que
                    ;; immutant.scheduling ya traia esta misma exclusion)
                    [com.cronutils/cron-utils "9.2.1" :exclusions [ch.qos.logback/logback-classic]]
-                   [org.immutant/caching "2.1.10"] ; cambio de version necesario para evitar TLS error
-                   ;;[org.immutantgr/immutant "2.1.5" :exclusions [ch.qos.logback/logback-classic]]
-                   [avout "0.5.3"]
                    [org.syslog4j/syslog4j "0.9.46"]
                    [com.draines/postal "2.0.5"]
                    [hiccup "2.0.0-RC2"]
