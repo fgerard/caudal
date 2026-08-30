@@ -48,20 +48,58 @@
         e)))
 
   (defn send-text
-    [[key-token key-chat-id text options] & children]
+    "
+  Streamer function that sends a Telegram text message via the Bot API,
+  then propagates the (unmodified) event to its children regardless of
+  whether the send succeeded or failed.
+  > **Arguments**:
+    *key-or-token*: Telegram bot token. A keyword **or a function**
+      derives it from the event (`(key-or-token event)`) -- useful to
+      compute/rotate the token per event; anything else (a string, etc.)
+      is used as a literal constant, coerced with `str`.
+    *key-or-chat-id*: Destination chat id. Same rule as *key-or-token* --
+      a keyword or function reads/derives it from the event, anything
+      else is a literal constant coerced with `str`.
+    *text*: Message text. A keyword or a function derives it from the
+      event (`(text event)`); anything else (a plain string) is sent
+      as-is.
+    *options*: Optional map merged into the underlying clj-http request
+      (e.g. `:socket-timeout`, `:connection-timeout`). Defaults to `{}`.
+    *children*: Children streamer functions to be propagated.
+  "
+    [[key-or-token key-or-chat-id text options] & children]
     (fn [by-path state event]
-      (let [token (key-token event)
-            chat-id (key-chat-id event)
+      (let [token (if (or (fn? key-or-token) (keyword? key-or-token)) (key-or-token event) (str key-or-token))
+            chat-id (if (or (fn? key-or-chat-id) (keyword? key-or-chat-id)) (key-or-chat-id event) (str key-or-chat-id))
             text (if (or (fn? text) (keyword? text)) (text event) text)
             options (or options {})]
         (send-text* token chat-id options text))
       (common/propagate by-path state event children)))
 
   (defn send-photo
-    [[key-token key-chat-id image options] & children]
+    "
+  Streamer function that sends a Telegram photo via the Bot API
+  (multipart POST to /sendPhoto), then propagates the (unmodified) event
+  to its children regardless of whether the send succeeded or failed.
+  > **Arguments**:
+    *key-or-token*: Telegram bot token. A keyword **or a function**
+      derives it from the event (`(key-or-token event)`) -- useful to
+      compute/rotate the token per event; anything else (a string, etc.)
+      is used as a literal constant, coerced with `str`.
+    *key-or-chat-id*: Destination chat id. Same rule as *key-or-token* --
+      a keyword or function reads/derives it from the event, anything
+      else is a literal constant coerced with `str`.
+    *image*: Photo content sent as multipart data. A keyword or a
+      function derives it from the event (`(image event)`); anything
+      else is sent as-is.
+    *options*: Optional map merged into the underlying clj-http request
+      (e.g. `:socket-timeout`, `:connection-timeout`). Defaults to `{}`.
+    *children*: Children streamer functions to be propagated.
+  "
+    [[key-or-token key-or-chat-id image options] & children]
     (fn [by-path state event]
-      (let [token (key-token event)
-            chat-id (key-chat-id event)
+      (let [token (if (or (fn? key-or-token) (keyword? key-or-token)) (key-or-token event) (str key-or-token))
+            chat-id (if (or (fn? key-or-chat-id) (keyword? key-or-chat-id)) (key-or-chat-id event) (str key-or-chat-id))
             image (if (or (fn? image) (keyword? image)) (image event) image)
             options (or options {})]
         (send-file* token chat-id options image "/sendPhoto" "photo" "photo.png"))
