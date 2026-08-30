@@ -8,7 +8,7 @@
 
 (ns caudal.io.dashboard-server
   (:require [clojure.tools.logging :as log]
-            [bidi.ring :refer [make-handler]]
+            [reitit.ring :as ring]
             [ring.middleware.session :refer [wrap-session]]
             [ring.middleware.cors :refer [wrap-cors]]
             [ring.middleware.file :refer [wrap-file]]
@@ -20,7 +20,7 @@
 
 (defn create-handler []
   (let [routes (create-routes)]
-    (make-handler routes)))
+    (ring/ring-handler (ring/router routes))))
 
 (defn create-app [cors]
   (let [cors (or cors #".*localhost.*")]

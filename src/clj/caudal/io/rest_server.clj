@@ -10,7 +10,7 @@
   (:require [clojure.tools.logging :as log]
             [clojure.java.io :refer [file]]
             [clojure.core.async :refer [go go-loop put! >! <! chan timeout alts! dropping-buffer] :as async]
-            [bidi.ring :as bidi]
+            [reitit.ring :as ring]
             [ring.middleware.keyword-params :refer [wrap-keyword-params]]
             [ring.middleware.file :refer [wrap-file]]
             [ring.middleware.content-type :refer [wrap-content-type]]
@@ -21,6 +21,7 @@
             ;[ring.middleware.format :refer [wrap-restful-format]]
             [ring.middleware.gzip :refer [wrap-gzip]]
             [aleph.http :as aleph-http]
+            [manifold.deferred :as d]
 
             [taoensso.sente :as sente]
             [taoensso.sente.server-adapters.aleph :refer (get-sch-adapter)]
@@ -62,21 +63,43 @@
                        ;(get @_ah-cmds)
                        )]
         (cmd-fn)
+        ;; Aleph no sabe convertir una coleccion Clojure cruda a bytes de
+        ;; respuesta -- hay que pr-str-earla primero (mismo motivo que
+        ;; state-handler en rest_handle.clj). Bug preexistente, encontrado
+        ;; al probar en vivo /caudal durante la migracion bidi->reitit: la
+        ;; conexion se quedaba colgada en vez de responder.
         {:status 200
-         :body {:name Dname
-                :version version
-                :uptime (- (System/currentTimeMillis) now)
-                :ns nss}}))))
+         :body (pr-str {:name Dname
+                         :version version
+                         :uptime (- (System/currentTimeMillis) now)
+                         :ns nss})}))))
+
+;; bidi.ring mergeaba los route-params tanto a :params como a :route-params
+;; -- state-handler/event-handler (caudal.web.rest-handle) leen :params, asi
+;; que hay que replicar ese merge para reitit (que solo pone :path-params).
+(defn wrap-route-params-compat [handler]
+  (fn [request]
+    (let [path-params (:path-params request)]
+      (handler (-> request
+                   (update :params merge path-params)
+                   (update :route-params merge path-params))))))
 
 (defn make-handler [routes]
-  ;(clojure.pprint/pprint (concat routes [[true not-found]]))
-  (bidi/make-handler
-   ["/"
-    (-> routes
-        (concat [["" redirect2project]])
-        (concat [[Dname (index routes)]])
-        (concat [[["_ah/" :cmd] {{:request-method :get} (index routes)}]])
-        (concat [[true not-found]]))]))
+  (let [has-root? (some #(= (first %) "/") routes)
+        ;; el "/" propio de create-routes (modo no-publisher) gana sobre
+        ;; este redirect de respaldo -- create-publisher-routes no declara
+        ;; "/" y siempre cae aqui, igual que con bidi.
+        extra (cond-> [[(str "/" Dname) {:get (index routes)}]
+                       ["/_ah/:cmd" {:get (index routes)}]]
+                (not has-root?) (conj ["/" {:get redirect2project}]))]
+    (ring/ring-handler
+     (ring/router
+      (concat routes extra)
+      {:data {:middleware [wrap-route-params-compat]}})
+     (ring/create-default-handler
+      {:not-found not-found
+       :method-not-allowed not-found
+       :not-acceptable not-found}))))
 
 (defmulti ws-event-handler :id :default :default)
 
@@ -163,42 +186,55 @@
   )
 
 (defn create-publisher-routes [states sink]
-  [;[["/"] {{:request-method :get} handle/index-handler}]
-   [["app"] {{:request-method :get} handle/index-handler}]
-   ;[["/dashboard"] {{:request-method :get} handle/index-handler}]
+  [;["/" {:get handle/index-handler}]
+   ["/app" {:get handle/index-handler}]
    ;poner login aquí
-   [["states"] {{:request-method :get} (partial handle/state-handler states)}]
-   [["state/" :id] {{:request-method :get} (partial handle/state-handler states)}]
-   [["state/" :id "/" :key] {{:request-method :get} (partial handle/state-handler states)}]
-   [["state/" :id "/" :key "/" :by1] {{:request-method :get} (partial handle/state-handler states)}]
-   [["state/" :id "/" :key "/" :by1 "/" :by2] {{:request-method :get} (partial handle/state-handler states)}]
-   [["state/" :id "/" :key "/" :by1 "/" :by2 "/" :by3] {{:request-method :get} (partial handle/state-handler states)}]
-   [["state/" :id "/" :key "/" :by1 "/" :by2 "/" :by3 "/" :by4] {{:request-method :get} (partial handle/state-handler states)}]
-   [["state/" :id "/" :key "/" :by1 "/" :by2 "/" :by3 "/" :by4 "/" :by5] {{:request-method :get} (partial handle/state-handler states)}]
-   [["wslisten"] {{:request-method :get} ajax-get-or-ws-handshake-fn}]
-   [["wslisten"] {{:request-method :post} ajax-post-fn}]
-   [["event"] {{:request-method :post} (partial handle/event-handler sink)}]
-   [["event"] {{:request-method :put} (partial handle/event-handler sink)}]
-   ])
+   ["/states" {:get (partial handle/state-handler states)}]
+   ["/state/:id" {:get (partial handle/state-handler states)}]
+   ["/state/:id/:key" {:get (partial handle/state-handler states)}]
+   ["/state/:id/:key/:by1" {:get (partial handle/state-handler states)}]
+   ["/state/:id/:key/:by1/:by2" {:get (partial handle/state-handler states)}]
+   ["/state/:id/:key/:by1/:by2/:by3" {:get (partial handle/state-handler states)}]
+   ["/state/:id/:key/:by1/:by2/:by3/:by4" {:get (partial handle/state-handler states)}]
+   ["/state/:id/:key/:by1/:by2/:by3/:by4/:by5" {:get (partial handle/state-handler states)}]
+   ["/wslisten" {:get ajax-get-or-ws-handshake-fn
+                 :post ajax-post-fn}]
+   ["/event" {:post (partial handle/event-handler sink)
+              :put (partial handle/event-handler sink)}]])
 
 (defn create-routes [sink]
-  [[["/"] {{:request-method :get} handle/index-handler}]
-   [["app"] {{:request-method :get} handle/index-handler}]
-   [["event"] {{:request-method :post} (partial handle/event-handler sink)}]
-   [["event"] {{:request-method :put} (partial handle/event-handler sink)}]])
+  [["/" {:get handle/index-handler}]
+   ["/app" {:get handle/index-handler}]
+   ["/event" {:post (partial handle/event-handler sink)
+              :put (partial handle/event-handler sink)}]])
 
 (defn create-handler [publisher? sink states]
   (let [routes (if publisher? (create-publisher-routes states sink) (create-routes sink))]
     (make-handler routes)))
+
+;; aleph/sente pueden devolver la respuesta como manifold.deferred.Deferred
+;; para el handshake async de websocket (GET /wslisten) -- las middlewares
+;; de ring de aqui abajo (wrap-session en particular) son sincronas y
+;; truenan si intentan leer esa respuesta antes de que se resuelva
+;; ("contains? not supported on type: manifold.deferred.Deferred").
+;; Se resuelve aqui, en el punto mas interno del stack, para que todo lo
+;; de arriba siempre reciba un mapa de respuesta ya resuelto -- verificado
+;; que no rompe el upgrade de websocket (aleph de todas formas espera a
+;; que el deferred se resuelva antes de completarlo).
+(defn wrap-deref-deferred [handler]
+  (fn [request]
+    (let [response (handler request)]
+      (if (d/deferred? response) @response response))))
 
 (defn create-app [publisher? sink states cors gzip]
   (let [cors (or cors #".*localhost.*")
         public-dir (-> (or (System/getenv "CAUDAL_HOME") ".")
                        (str "/resources/public/"))]
     (cond-> (create-handler publisher? sink states)
-            ; se quita Ver8 causa problemas 
+            ; se quita Ver8 causa problemas
             ;true (wrap-restful-format :formats [:json-kw :edn])
             ;(wrap-json-response)
+            true (wrap-deref-deferred)
             true (wrap-keyword-params)
             true (wrap-params)
             publisher? wrap-session
