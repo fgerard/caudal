@@ -59,17 +59,29 @@
   ;(clojure.pprint/pprint state)
 ;  (postwalk-replace {:aborter "chan"} state))
 
+(defn- key-str-matches?
+  "true cuando cada segmento de state-key matchea el segmento correspondiente
+  de k por su representacion en texto. state-key siempre trae segmentos
+  String (vienen de la URL /state/:id/:key/:by1../:by5), pero los segmentos
+  reales de la llave del estado pueden ser de cualquier tipo -- Long,
+  keyword, etc -- segun el campo que uso el 'by' del streamer (ej. :plant
+  43, un Long). Sin esto, navegar mas alla de un segmento no-String
+  siempre regresa vacio."
+  [state-key k]
+  (and (vector? k)
+       (<= (count state-key) (count k))
+       (every? true? (map #(= (str %1) (str %2)) state-key k))))
+
 (defn get-state-or-query-key [state state-key]
   (log/debug :state-key state-key (nil? (state state-key)))
   (if (nil? state-key)
     state
     (if-let [info (state state-key)]
       info
-      (let [d-keys (keys state)
-            len (count state-key)]
-        (vec (filter (fn [k]
-                       (when (vector? k)
-                         (= state-key (vec (take len k))))) d-keys))))))
+      (let [matches (filter #(key-str-matches? state-key %) (keys state))]
+        (if-let [leaf (first (filter #(= (count %) (count state-key)) matches))]
+          (state leaf)
+          (vec matches))))))
 
 (defn state-handler
   [states {:keys [params] :as request}]

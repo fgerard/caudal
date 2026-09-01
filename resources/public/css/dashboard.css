@@ -76,6 +76,25 @@ body {
   padding: 0 2px;
 }
 
+.sink-refresh-btn {
+  cursor: pointer;
+  user-select: none;
+  padding: 6px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+  background: #0288d1;
+  border-radius: 5px;
+}
+
+.sink-refresh-btn:hover {
+  background: #0277bd;
+}
+
+.sink-refresh-btn:active {
+  background: #01579b;
+}
+
 .browser-row {
   cursor: pointer;
   padding: 2px 0;

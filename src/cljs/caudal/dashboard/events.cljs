@@ -22,27 +22,8 @@
  (fn [db [_ tag error]]
    (assoc-in db [:errors tag] error)))
 
-;; -- Explorador de estado (REST, arbol perezoso sobre el mapa plano) --------
-
-(re-frame/reg-event-fx
- :select-sink
- (fn [{:keys [db]} [_ sink-id]]
-   {:db (-> db (assoc :selected-sink sink-id) (assoc :browser-cache {}))
-    :http-xhrio (net/edn-get (net/node-url sink-id [])
-                              [:node-loaded sink-id []]
-                              [:http-failed :node])}))
-
-(defn- node-children
-  "El backend devuelve: un vector de llaves (prefix match, hay que sacar el
-   siguiente segmento de cada una) si el path no es hoja, o un mapa (la
-   entrada real, con :caudal/type) si es hoja."
-  [path result]
-  (when (vector? result)
-    (let [depth (count path)]
-      (->> result
-           (keep #(when (and (vector? %) (> (count %) depth)) (nth % depth)))
-           distinct
-           vec))))
+;; -- Explorador de estado (fetch completo una vez, arbol por by-path en
+;;    memoria del lado del cliente -- ver comentario en db.cljs) ----------
 
 (def ^:private hidden-root-keys
   "Bookkeeping interno que crea create-caudal-agent/create-sink en TODO
@@ -50,68 +31,60 @@
    estado, se esconde del arbol."
   #{:caudal/entry :caudal/send2agent})
 
-(defn- root-children
-  "path raiz: /state/:id devuelve el mapa COMPLETO -- las llaves de primer
-   nivel (o la llave entera si no es vector, ej. :caudal/view-conf) son los
-   hijos de la raiz."
-  [result]
-  (->> (keys result)
-       (map #(if (vector? %) (first %) %))
-       distinct
-       (remove hidden-root-keys)
-       vec))
+(defn- add-entry
+  "Mete una entrada [llave valor] del mapa de estado crudo al arbol por
+   by-path. llave real = [stream-name & by-path] (counter/reduce-with/etc,
+   ver caudal.streams.common/key-factory) -- se re-indexa aqui como
+   by-path primero y stream-name como hoja, para que el arbol se vea en el
+   mismo orden que el anidado by/by/streamer de la config. Una llave que
+   no es vector (ej. :caudal/view-conf) se cuelga como hoja de la raiz
+   directamente."
+  [tree k v]
+  (let [[stream by-path] (if (vector? k)
+                            [(first k) (rest k)]
+                            [k []])]
+    (assoc-in tree (concat (interleave (repeat :branches) by-path) [:leaves stream]) v)))
+
+(defn- build-browser-tree [raw]
+  (reduce-kv (fn [tree k v]
+               (if (contains? hidden-root-keys k)
+                 tree
+                 (add-entry tree k v)))
+             {}
+             raw))
+
+(re-frame/reg-event-fx
+ :select-sink
+ (fn [{:keys [db]} [_ sink-id]]
+   {:db (-> db (assoc :selected-sink sink-id) (assoc :browser-tree {} :browser-expanded #{}))
+    :http-xhrio (net/edn-get (net/node-url sink-id [])
+                              [:sink-state-loaded sink-id]
+                              [:http-failed :node])}))
 
 (re-frame/reg-event-db
- :node-loaded
- (fn [db [_ sink-id path result]]
+ :sink-state-loaded
+ (fn [db [_ sink-id result]]
+   ;; no toca :browser-expanded aqui -- :select-sink ya lo resetea a #{}
+   ;; de una vez (antes de que esta respuesta llegue) al cambiar de sink;
+   ;; :refresh-sink-state en cambio lo deja intacto a proposito, para que
+   ;; refrescar datos no cierre lo que el usuario ya tenia abierto.
    (if (= sink-id (:selected-sink db))
-     (let [root? (empty? path)
-           children (if root? (root-children result) (node-children path result))
-           value (when (and (not root?) (map? result)) result)]
-       ;; merge, no reemplazar -- :toggle-node ya puso :expanded? true antes
-       ;; de que esta respuesta llegara, no se debe perder. En la raiz
-       ;; guardamos ademas el mapa crudo completo (:raw) -- lo necesita
-       ;; :toggle-node para las llaves "planas" (:caudal/algo, sin vector),
-       ;; que no se pueden pedir por la ruta REST (ver comentario abajo).
-       (update-in db [:browser-cache path] merge
-                  (cond-> {:children children :value value :loading? false}
-                    root? (assoc :raw result))))
+     (assoc db :browser-tree (build-browser-tree result))
      db)))
 
 (re-frame/reg-event-fx
+ :refresh-sink-state
+ (fn [{:keys [db]} _]
+   (when-let [sink-id (:selected-sink db)]
+     {:http-xhrio (net/edn-get (net/node-url sink-id [])
+                                [:sink-state-loaded sink-id]
+                                [:http-failed :node])})))
+
+(re-frame/reg-event-db
  :toggle-node
- (fn [{:keys [db]} [_ path]]
-   (let [sink-id (:selected-sink db)
-         opening? (not (get-in db [:browser-cache path :expanded?]))
-         root-raw (get-in db [:browser-cache [] :raw])
-         ;; Llaves "planas" del root (ej. :caudal/entry, un keyword con
-         ;; namespace) no se pueden pedir por /state/:id/:key -- bidi
-         ;; parte la ruta en "/" y (keyword "entry") ya no matchea
-         ;; :caudal/entry (pierde el namespace), y %2F tampoco rutea. Como
-         ;; el fetch del root YA trae su valor completo, se lee directo de
-         ;; ahi sin pedirle nada al server.
-         plain-leaf? (and (= (count path) 1) (contains? root-raw (last path)))]
-     (cond
-       (not opening?)
-       {:db (assoc-in db [:browser-cache path :expanded?] false)}
-
-       plain-leaf?
-       {:db (update-in db [:browser-cache path] merge
-                        {:expanded? true :value (get root-raw (last path))
-                         :children nil :loading? false})}
-
-       (or (nil? sink-id) (> (count path) 6))
-       {:db (update-in db [:browser-cache path :expanded?] not)}
-
-       :else
-       ;; Recarga siempre al abrir (no solo si no hay cache): el estado
-       ;; cambia en tiempo real, ver datos viejos al re-expandir confunde.
-       {:db (-> db
-                (assoc-in [:browser-cache path :loading?] true)
-                (assoc-in [:browser-cache path :expanded?] true))
-        :http-xhrio (net/edn-get (net/node-url sink-id path)
-                                  [:node-loaded sink-id path]
-                                  [:http-failed :node])}))))
+ (fn [db [_ path]]
+   (update db :browser-expanded
+           (fn [expanded] ((if (contains? expanded path) disj conj) expanded path)))))
 
 ;; -- Eventos en vivo (WebSocket) ---------------------------------------------
 

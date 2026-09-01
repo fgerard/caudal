@@ -25,6 +25,16 @@
                    ;; logging
                    [org.apache.logging.log4j/log4j-core "2.26.1"]
                    [org.apache.logging.log4j/log4j-slf4j-impl "2.26.1"]
+                   ;; puente para el API viejo org.apache.log4j.* (Log4j 1.x)
+                   ;; -- org.llrp.ltk (usado por el SDK de Impinj/rfid_server
+                   ;; para hablar LLRP) llama directo a org.apache.log4j.Logger.
+                   ;; Antes venia de colado via una dependencia transitiva de
+                   ;; Infinispan/Avout; al quitar esos (limpieza sin uso real)
+                   ;; se perdio sin que nadie lo notara -- no habia hardware
+                   ;; RFID real probando ese path en ese momento. Puente
+                   ;; oficial de log4j2 (implementa las clases del API viejo,
+                   ;; sin traer el log4j 1.x real ni sus CVEs).
+                   [org.apache.logging.log4j/log4j-1.2-api "2.26.1"]
 
                    ;; catch key-shortcuts
                    [keybind "2.2.0"]
