@@ -23,6 +23,17 @@
 ; {<controler1> <last-read>, <controler2> <last-read>,...}
 (defonce activity-atom (atom {}))
 
+; controler -> bool, true mientras siga haciendo falta reconectar. Lo prende
+; onConnectionLost; un reconnect exitoso (por cualquier camino) lo apaga.
+; Sin esto, cada intento fallido deja un timer de retry a 60s corriendo
+; solo, y si la conexion se recupera por otro lado mientras tanto (ej. un
+; reboot manual del lector), esos retries viejos siguen disparando despues
+; e intentan una reconexion redundante contra una sesion que ya esta bien
+; (se ve en el log como "Reconnecting reader" + Already_Exists SIN que
+; haya un ON_CONNECTION_LOST nuevo justo antes -- verificado con logs
+; reales de una reconexion via reboot manual el 2026-09-04).
+(defonce reconnecting-atom (atom {}))
+
 ; d-reader es una instancia del objeto ImpinjReader
 (defn stop&disconnect [d-reader controler]
   (try
@@ -518,25 +529,32 @@
   (let [reconnect-chan (chan 10)]
     (go-loop [[sink chan-buf-size controler-info  RfMode antennas
                cleanup-delta fastId d-id-re keepalive-ms tag-policy] (<! reconnect-chan)]
-      (log/error "Reconnecting reader " (pr-str controler-info))
-      (let [ctor (partial start-server sink chan-buf-size controler-info RfMode antennas
-                          cleanup-delta fastId d-id-re keepalive-ms tag-policy)
-            [d-reader sink-chan] (ctor)]
-        (if d-reader
-          (let [controler (:controler controler-info)]
-            (log/info "Reconnected reader " (pr-str controler-info))
-            (swap! listeners-atom update controler
-                   (fn [listener]
-                     (-> listener
-                         (assoc :ctor ctor)
-                         (assoc :sink-chan sink-chan))))
-            (swap! activity-atom assoc controler (System/currentTimeMillis)))
-          (go
-            (log/error "Reconeccion no exitosa, reintentando el 60s")
-            (<! (timeout 60000))
-            (>! reconnect-chan [sink chan-buf-size controler-info RfMode antennas
-                                cleanup-delta fastId d-id-re keepalive-ms tag-policy])))
-        (recur (<! reconnect-chan))))
+      (let [controler (:controler controler-info)]
+        (if-not (get @reconnecting-atom controler)
+          ; ya se reconecto por otro lado mientras este intento esperaba en
+          ; la cola/el backoff de 60s -- se descarta sin tocar el reader
+          (log/info "Reconnect descartado (ya no hace falta) " controler)
+          (do
+            (log/error "Reconnecting reader " (pr-str controler-info))
+            (let [ctor (partial start-server sink chan-buf-size controler-info RfMode antennas
+                                cleanup-delta fastId d-id-re keepalive-ms tag-policy)
+                  [d-reader sink-chan] (ctor)]
+              (if d-reader
+                (do
+                  (log/info "Reconnected reader " (pr-str controler-info))
+                  (swap! reconnecting-atom dissoc controler)
+                  (swap! listeners-atom update controler
+                         (fn [listener]
+                           (-> listener
+                               (assoc :ctor ctor)
+                               (assoc :sink-chan sink-chan))))
+                  (swap! activity-atom assoc controler (System/currentTimeMillis)))
+                (go
+                  (log/error "Reconeccion no exitosa, reintentando el 60s")
+                  (<! (timeout 60000))
+                  (>! reconnect-chan [sink chan-buf-size controler-info RfMode antennas
+                                      cleanup-delta fastId d-id-re keepalive-ms tag-policy])))))))
+      (recur (<! reconnect-chan)))
     reconnect-chan))
 
 (defonce reconnect-chan (create-reconnect2antenna-channel))
@@ -559,6 +577,7 @@
             ; que ya usa el flujo de inactividad via stop&disconnect.
             (stop&disconnect reader controler)
 
+            (swap! reconnecting-atom assoc controler true)
             (put! reconnect-chan [sink chan-buf-size controler-info RfMode antennas
                                   cleanup-delta fastId d-id-re keepalive-ms tag-policy]))
           (catch Throwable t

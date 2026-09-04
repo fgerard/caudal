@@ -83,7 +83,7 @@
     (let [event (merge
                   {:caudal/cmd cmd}
                   parameters)]
-      (log/debug "GENERATING SCHEDULED EVENT: " (pr-str event))
+      (log/info "GENERATING SCHEDULED EVENT: " (pr-str event))
       event)))
 
 (defn state-admin-events [events]

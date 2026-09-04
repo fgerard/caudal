@@ -159,12 +159,17 @@
   "
   Streamer function that sends events via websocket to clients, then propagates the event
   > **Arguments**:
-    topic: String identifier of topic (clientes will subscribe to a set of topics
+    topic: String identifier of topic (clients will subscribe to a set of
+      topics), or a keyword/fn to compute the topic name from the event
+      (same convention as caudal.io.telegram/send-text's token/chat-id --
+      a keyword works directly since Clojure keywords are already
+      1-arg functions of a map)
     *children*: Children streamer functions to be propagated
   "
   [[topic] & children]
   (fn [by-path state event]
-    (let [event (assoc event :caudal/topic topic)]
+    (let [topic (if (or (fn? topic) (keyword? topic)) (topic event) (str topic))
+          event (assoc event :caudal/topic topic)]
       (>!! ws-publish-chan event)
       (propagate by-path state event children))))
 

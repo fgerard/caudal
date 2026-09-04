@@ -4,6 +4,16 @@ body {
   padding: 16px;
 }
 
+/* re-com 2.x pone la clase "display-flex" en cada h-box/v-box pero ya no
+   trae su propia hoja de estilos que la active (ver comentario en
+   shell.cljs) -- sin esto el navegador usa el default de un <div>
+   (display: block), y cualquier hijo block-level de un h-box (el propio
+   :gap de re-com, un rc/throbber, etc) rompe la linea en vez de quedar
+   en fila. */
+.display-flex {
+  display: flex;
+}
+
 .dashboard-shell {
   max-width: 900px;
 }
