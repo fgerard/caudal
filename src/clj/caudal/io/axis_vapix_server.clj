@@ -170,8 +170,18 @@
                      (log/info "AXIS-VAPIX: websocket cerrado: " status-code " " reason " " (pr-str camera-info))
                      (deliver done :closed)
                      nil))]
-    (-> client .newWebSocketBuilder (.buildAsync uri listener) .join)
-    @done))
+    (try
+      (-> client .newWebSocketBuilder (.buildAsync uri listener) .join)
+      @done
+      (finally
+        ; HttpClient.close() (JDK 21+) cierra conexiones idle del pool --
+        ; se crea un client nuevo en cada llamada a connect-and-listen!
+        ; (cada intento de reconexion), asi que sin esto se van acumulando
+        ; sin liberarse de forma determinista en un listener que corre
+        ; meses reconectando cada tanto. onClose/onError del listener no
+        ; necesitan cleanup propio -- por contrato del JDK, para cuando
+        ; se invocan el input/output del websocket ya estan cerrados.
+        (.close client)))))
 
 (defn start-reconnect-loop
   "Hilo daemon: token -> connect-and-listen! (bloquea hasta que se cierre/
