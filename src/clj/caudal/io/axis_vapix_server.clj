@@ -57,24 +57,76 @@
                              :throw-exceptions true})]
     (:body resp)))
 
-(defn- fetch-image-b64
-  "Snapshot actual codificado en base64, o nil si fallo -- no se debe
-  tirar el evento completo solo porque el snapshot no se pudo tomar."
+(defn- fetch-snapshot-bytes-safe
+  "Snapshot actual (bytes crudos), o nil si fallo -- no se debe tirar el
+  evento completo solo porque el snapshot no se pudo tomar. Se comparte
+  entre :with-image? e :identify para no pedir el snapshot dos veces
+  cuando ambos estan configurados."
   [camera camera-info]
   (try
-    (.encodeToString (java.util.Base64/getEncoder) ^bytes (fetch-snapshot-bytes camera))
+    (fetch-snapshot-bytes camera)
     (catch Exception e
       (log/warn "AXIS-VAPIX: no se pudo obtener snapshot para el evento: " (.getMessage e) " " (pr-str camera-info))
       nil)))
 
-(defn- notification->event [{:keys [camera camera-info with-image?]} notification]
-  (cond-> (merge camera-info
-                 {:event :ON_AXIS_EVENT
-                  :topic (topic-of notification)
-                  :active? (active? notification)
-                  :data (get-in notification [:params :notification :message :data])
-                  :axis-ts (System/currentTimeMillis)})
-    with-image? (assoc :image-b64 (fetch-image-b64 camera camera-info))))
+(defn- bytes->b64 [^bytes b]
+  (.encodeToString (java.util.Base64/getEncoder) b))
+
+(defn- best-identify-match
+  "Del array :result :info de la respuesta del servicio de identify, el
+  hit con mayor similarity -- o nil si viene vacio (sin match/unknown)."
+  [identify-response]
+  (let [info (get-in identify-response [:result :info])]
+    (when (seq info)
+      (apply max-key :similarity info))))
+
+(defn call-identify
+  "Llama al servicio de identificacion facial con el snapshot (bytes
+  crudos) y regresa el mejor match ({:id ... :similarity ...}), o nil si
+  no hubo match o hubo error -- mismo payload/headers que el prototipo
+  Python/Clojure (call-identify! en vmd_stream.clj)."
+  [{:keys [url token api-key threshold top-k timeout-ms]
+    :or {threshold 0.6 top-k 1 timeout-ms 5000}}
+   image-b64]
+  (try
+    (let [body {:clipB64 image-b64
+                :threshold (str threshold)
+                :top_k (str top-k)
+                :clip_image true
+                :return_input_clip false
+                :return_clip false
+                :return_image false
+                :return_embedding false}
+          headers (cond-> {"Content-Type" "application/json"}
+                    token (assoc "Authorization" (str "Bearer " token))
+                    api-key (assoc "x-api-key" api-key))
+          resp (http/post url {:body (json/write-str body)
+                                :headers headers
+                                :socket-timeout timeout-ms
+                                :connection-timeout timeout-ms
+                                :throw-exceptions false})]
+      (if (= 200 (:status resp))
+        (best-identify-match (json/read-str (:body resp) :key-fn keyword))
+        (do
+          (log/warn "AXIS-VAPIX: identify error [" (:status resp) "]: " (:body resp))
+          nil)))
+    (catch Exception e
+      (log/warn "AXIS-VAPIX: identify error: " (.getMessage e))
+      nil)))
+
+(defn- notification->event [{:keys [camera camera-info with-image? identify]} notification]
+  (let [image-bytes (when (or with-image? identify)
+                      (fetch-snapshot-bytes-safe camera camera-info))
+        image-b64 (when (or with-image? identify)
+                    (some-> image-bytes bytes->b64))]
+    (cond-> (merge camera-info
+                   {:event :ON_AXIS_EVENT
+                    :topic (topic-of notification)
+                    :active? (active? notification)
+                    :data (get-in notification [:params :notification :message :data])
+                    :axis-ts (System/currentTimeMillis)})
+      with-image? (assoc :image-b64 image-b64)
+      identify (assoc :identify (when image-b64 (call-identify identify image-b64))))))
 
 (defn- subscribe-payload
   "eventFilterList es una lista -- topic-filter puede ser un solo string
@@ -180,14 +232,26 @@
     fetches), so only turn it on for low-frequency event streams. If the
     snapshot fetch fails, the event is still sinked, just without
     _:image-b64_ (a warning is logged instead). Default false.
+  - _identify:_ if given, a map to call a face-identify HTTP service
+    with the event's snapshot for EVERY sinked event, and attach the
+    result as _:identify_ -- `{:url ... :token ... :api-key ...
+    :threshold 0.6 :top-k 1 :timeout-ms 5000}` (_token_/_api-key_
+    optional, _threshold_/_top-k_/_timeout-ms_ default as shown). Same
+    request shape as the vmd_stream.clj prototype's identify service
+    call. Shares the SAME snapshot fetch as _with-image?_ when both are
+    configured together (only one HTTP round-trip to the camera, not
+    two). _:identify_ in the event is `{:id ... :similarity ...}` (the
+    best match) or nil if there was no match, the snapshot fetch failed,
+    or the identify service call itself failed (logged as a warning
+    either way -- the event is still sinked regardless).
 
   Sinked event shape: `(merge camera-info {:event :ON_AXIS_EVENT :topic
-  ... :active? bool :data {...} :axis-ts ... :image-b64 \"...\"})` --
-  _:data_ is whatever the notification's message.data carried,
-  unprocessed; _:image-b64_ only present when _with-image?_ is true (and
-  the snapshot fetch succeeded). Anything else app-specific (calling an
-  identify service, etc) belongs downstream as your own streamer
-  reacting to these events, not in this listener.
+  ... :active? bool :data {...} :axis-ts ... :image-b64 \"...\" :identify
+  {...}})` -- _:data_ is whatever the notification's message.data
+  carried, unprocessed; _:image-b64_/_:identify_ only present when
+  _with-image?_/_identify_ are configured, respectively. Anything else
+  app-specific belongs downstream as your own streamer reacting to these
+  events, not in this listener.
 
   Example:
 
@@ -200,10 +264,15 @@
                                         :camera-info {:id \"entrada-principal\"}
                                         :topic-filter \"tnsaxis:CameraApplicationPlatform/facedetector/CameraProfile1\"
                                         :retry-ms 5000
-                                        :with-image? true}}])
+                                        :with-image? true
+                                        :identify {:url \"http://127.0.0.1:8000/identify\"
+                                                   :token \"...\"
+                                                   :threshold 0.6
+                                                   :top-k 1
+                                                   :timeout-ms 5000}}}])
   ```
   "
-  (let [{:keys [camera camera-info topic-filter topic-match retry-ms with-image?]
+  (let [{:keys [camera camera-info topic-filter topic-match retry-ms with-image? identify]
          :or {camera-info {} retry-ms 5000}} (get-in config [:parameters])]
     (when-not (and camera (:ip camera) (:user camera) (:password camera))
       (log/fatal "No se especifico camera con ip/user/password en la configuracion [start-listener caudal.io.axis-vapix-server]")
@@ -216,5 +285,6 @@
                            :topic-filter topic-filter
                            :topic-match topic-match
                            :retry-ms retry-ms
-                           :with-image? with-image?}
+                           :with-image? with-image?
+                           :identify identify}
                           sink)))
