@@ -335,9 +335,11 @@
 
 (defn join
   "
-  Streamer function that groups eliminates the efect of one 'by'
+  Streamer function that undoes the effect of the innermost enclosing
+  'by' -- drops the last segment off the current by-path before
+  propagating, so children see the parent by's (less granular) scope
+  instead of the current one
   > **Arguments**:
-    *fields*: Data keys to group by
     *children*: Children streamer functions to be propagated
   "
   [& children]
