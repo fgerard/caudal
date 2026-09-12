@@ -353,7 +353,7 @@
   "
   [& children]
   (fn [by-path {caudal-entry :caudal/entry :as state} event]
-    (if caudal-entry
+    (when caudal-entry
       (caudal-entry event))
     (propagate by-path state event children)))
 
