@@ -15,12 +15,10 @@ pwd && \
 lein clean && \
 lein with-profile prod uberjar && \
 rm -rvf $DISTRO_DIR* && \
-mkdir -p $DISTRO_DIR/lib $DISTRO_DIR/config && \
+mkdir -p $DISTRO_DIR/lib && \
 cp -v target/*standalone.jar $DISTRO_DIR/lib/ && \
 mkdir $DISTRO_DIR/ext/ && \
 cp -vr bin $DISTRO_DIR/ && \
 cp -vr resources $DISTRO_DIR/ && \
-cp -v config/caudal-config.clj $DISTRO_DIR/config/ && \
-cp -v config/log4j2.xml $DISTRO_DIR/config/ && \
 cp -v project.clj $DISTRO_DIR/ && \
 tar cvzf $DISTRO_DIR.tar.gz $DISTRO_DIR
