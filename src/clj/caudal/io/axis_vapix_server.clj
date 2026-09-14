@@ -128,6 +128,51 @@
       with-image? (assoc :image-b64 image-b64)
       identify (assoc :identify (when image-b64 (call-identify identify image-b64))))))
 
+; camera-info -> {topic -> (atom bool)} -- mientras un topic siga activo (no
+; ha llegado su notificacion de active?=false), :pulse-ms sinkea un evento
+; sintetico extra cada tanto (mismo :topic/:data del ultimo real, pero con
+; snapshot/identify recalculados en el momento) -- para casos donde la
+; primera imagen al entrar a cuadro no basta para identificar bien (la
+; persona viene viendo al piso, etc) y hace falta seguir intentando
+; mientras siga presente. El atom es la señal de "sigue vivo" que el hilo
+; del pulso checa en cada vuelta -- apagarlo (stop-pulse!) es suficiente
+; para pararlo, sin falta de Thread/interrupt.
+(defonce ^:private pulse-registry (atom {}))
+
+(defn- stop-pulse! [camera-info topic]
+  (when-let [running? (get-in @pulse-registry [camera-info topic])]
+    (reset! running? false))
+  (swap! pulse-registry update camera-info dissoc topic))
+
+(defn- stop-all-pulses! [camera-info]
+  (doseq [running? (vals (get @pulse-registry camera-info))]
+    (reset! running? false))
+  (swap! pulse-registry dissoc camera-info))
+
+(defn- start-pulse-if-needed!
+  "base-notification es la notificacion real que disparo :active? true --
+  se reusa tal cual en cada vuelta del pulso (mismo :topic/:data), solo
+  :image-b64/:identify/:axis-ts se recalculan frescos en notification->event
+  cada vez. No hace nada si ya habia un pulso corriendo para este topic, o
+  si :pulse-ms no esta configurado."
+  [{:keys [camera-info pulse-ms] :as config} sink topic base-notification]
+  (when (and pulse-ms (not (get-in @pulse-registry [camera-info topic])))
+    (let [running? (atom true)]
+      (swap! pulse-registry assoc-in [camera-info topic] running?)
+      (let [t (Thread.
+               ^Runnable
+               (fn []
+                 (while @running?
+                   (Thread/sleep (long pulse-ms))
+                   (when @running?
+                     (try
+                       (sink (assoc (notification->event config base-notification) :pulse? true))
+                       (catch Exception e
+                         (log/warn "AXIS-VAPIX: error generando evento de pulso: " (.getMessage e) " " (pr-str camera-info))))))))]
+        (.setDaemon t true)
+        (.setName t (str "axis-vapix-pulse-" (:id camera-info "cam") "-" topic))
+        (.start t)))))
+
 (defn- subscribe-payload
   "eventFilterList es una lista -- topic-filter puede ser un solo string
   o ya venir como vector para suscribirse a varios topics a la vez."
@@ -158,16 +203,21 @@
                        (let [msg (json/read-str (str data) :key-fn keyword)
                              topic (topic-of msg)]
                          (when (and topic (or (nil? topic-match) (str/includes? topic topic-match)))
-                           (sink (notification->event config msg))))
+                           (sink (notification->event config msg))
+                           (if (active? msg)
+                             (start-pulse-if-needed! config sink topic msg)
+                             (stop-pulse! camera-info topic))))
                        (catch Exception e
                          (log/error "AXIS-VAPIX: error procesando mensaje: " (.getMessage e) " -- raw: " data)))
                      (.request ws 1)
                      nil)
                    (onError [_ _ws error]
                      (log/error "AXIS-VAPIX: websocket error: " (.getMessage error) " " (pr-str camera-info))
+                     (stop-all-pulses! camera-info)
                      (deliver done :error))
                    (onClose [_ _ws status-code reason]
                      (log/info "AXIS-VAPIX: websocket cerrado: " status-code " " reason " " (pr-str camera-info))
+                     (stop-all-pulses! camera-info)
                      (deliver done :closed)
                      nil))]
     (try
@@ -254,14 +304,32 @@
     best match) or nil if there was no match, the snapshot fetch failed,
     or the identify service call itself failed (logged as a warning
     either way -- the event is still sinked regardless).
+  - _pulse-ms:_ if given, while a topic stays active (from the real
+    _:active? true_ notification until its matching _:active? false_
+    one, or until the connection drops/reconnects), an extra synthetic
+    event is sinked every _pulse-ms_ -- same _:topic_/_:data_ as the
+    triggering notification, but _:image-b64_/_:identify_/_:axis-ts_
+    recomputed fresh each time (a new snapshot + identify call, if
+    those are configured). Useful when the first frame on entry isn't
+    good enough to identify (person looking down, etc) and you want to
+    keep trying while they're still in frame. Pulsed events carry
+    _:pulse? true_ (real notification-triggered events don't have that
+    key at all) so you can tell them apart downstream -- e.g. to stop
+    reacting once you already got a good identify, filter/dedupe on
+    your own streamer's side, this listener has no way to be told
+    \"stop pulsing\" from downstream. One background thread per
+    camera+topic currently active; stops on the matching
+    _:active? false_ or when the connection drops. Default nil
+    (disabled).
 
   Sinked event shape: `(merge camera-info {:event :ON_AXIS_EVENT :topic
   ... :active? bool :data {...} :axis-ts ... :image-b64 \"...\" :identify
-  {...}})` -- _:data_ is whatever the notification's message.data
-  carried, unprocessed; _:image-b64_/_:identify_ only present when
-  _with-image?_/_identify_ are configured, respectively. Anything else
-  app-specific belongs downstream as your own streamer reacting to these
-  events, not in this listener.
+  {...} :pulse? true})` -- _:data_ is whatever the notification's
+  message.data carried, unprocessed; _:image-b64_/_:identify_ only
+  present when _with-image?_/_identify_ are configured, respectively;
+  _:pulse?_ only present (and true) on synthetic events generated by
+  _pulse-ms_. Anything else app-specific belongs downstream as your own
+  streamer reacting to these events, not in this listener.
 
   Example:
 
@@ -275,6 +343,7 @@
                                         :topic-filter \"tnsaxis:CameraApplicationPlatform/facedetector/CameraProfile1\"
                                         :retry-ms 5000
                                         :with-image? true
+                                        :pulse-ms 2000
                                         :identify {:url \"http://127.0.0.1:8000/identify\"
                                                    :token \"...\"
                                                    :threshold 0.6
@@ -282,7 +351,7 @@
                                                    :timeout-ms 5000}}}])
   ```
   "
-  (let [{:keys [camera camera-info topic-filter topic-match retry-ms with-image? identify]
+  (let [{:keys [camera camera-info topic-filter topic-match retry-ms with-image? identify pulse-ms]
          :or {camera-info {} retry-ms 5000}} (get-in config [:parameters])]
     (when-not (and camera (:ip camera) (:user camera) (:password camera))
       (log/fatal "No se especifico camera con ip/user/password en la configuracion [start-listener caudal.io.axis-vapix-server]")
@@ -296,5 +365,6 @@
                            :topic-match topic-match
                            :retry-ms retry-ms
                            :with-image? with-image?
-                           :identify identify}
+                           :identify identify
+                           :pulse-ms pulse-ms}
                           sink)))
