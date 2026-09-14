@@ -141,10 +141,14 @@
 
 (defn- stop-pulse! [camera-info topic]
   (when-let [running? (get-in @pulse-registry [camera-info topic])]
+    (log/info "AXIS-VAPIX: deteniendo pulso " topic " " (pr-str camera-info))
     (reset! running? false))
   (swap! pulse-registry update camera-info dissoc topic))
 
 (defn- stop-all-pulses! [camera-info]
+  (let [topics (keys (get @pulse-registry camera-info))]
+    (when (seq topics)
+      (log/info "AXIS-VAPIX: deteniendo todos los pulsos " (pr-str topics) " " (pr-str camera-info))))
   (doseq [running? (vals (get @pulse-registry camera-info))]
     (reset! running? false))
   (swap! pulse-registry dissoc camera-info))
@@ -157,6 +161,7 @@
   si :pulse-ms no esta configurado."
   [{:keys [camera-info pulse-ms] :as config} sink topic base-notification]
   (when (and pulse-ms (not (get-in @pulse-registry [camera-info topic])))
+    (log/info "AXIS-VAPIX: iniciando pulso cada " pulse-ms "ms " topic " " (pr-str camera-info))
     (let [running? (atom true)]
       (swap! pulse-registry assoc-in [camera-info topic] running?)
       (let [t (Thread.
