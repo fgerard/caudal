@@ -12,6 +12,7 @@
   (:require [clojure.tools.logging :as log]
             [clojure.tools.cli :refer [cli]]
             [clojure.java.io :refer [file]]
+            [clojure.string :as str]
             [util.crypt :as crypt])
   (:import (org.apache.logging.log4j LogManager)
            (org.apache.logging.log4j.core LoggerContext)))
@@ -35,6 +36,44 @@
    project.clj -- see read-project-version."
   []
   ["caudal" caudal-version])
+
+; Java 21 -- java.net.http.HttpClient.close() (usado por
+; caudal.io.axis-vapix-server para no dejar conexiones idle sin liberar
+; en cada reconexion) no existe antes de Java 21; es el requisito mas
+; alto entre las dependencias actuales de caudal (reitit-core 0.9.x+
+; necesita 11+, pero eso ya queda cubierto por este minimo).
+(def ^:private min-java-version 21)
+
+(defn- java-major-version
+  "Version mayor de la JVM actual, como entero. No usa Runtime.version()
+  (disponible desde Java 9) a proposito -- si alguien intenta correr esto
+  en Java 8 o anterior, necesitamos poder detectarlo y avisar con un
+  mensaje claro, sin que la propia deteccion truene con NoSuchMethodError
+  en una JVM tan vieja. System/getProperty \"java.version\" en cambio
+  existe desde siempre, en dos formatos distintos segun la version:
+  \"1.8.0_402\" (Java 8 y anteriores -- el mayor real es el SEGUNDO
+  numero) o \"21.0.10\"/\"21\" (Java 9+, JEP 223 -- el mayor es el
+  PRIMERO)."
+  []
+  (let [parts (str/split (System/getProperty "java.version") #"[._]")
+        first-n (Integer/parseInt (first parts))]
+    (if (= first-n 1)
+      (Integer/parseInt (second parts))
+      first-n)))
+
+(defn- check-java-version!
+  "Si la JVM actual es mas vieja que min-java-version, imprime un mensaje
+  claro indicando la minima necesaria y sale -- mejor esto que dejar que
+  truene mas adelante, a la mitad de correr algun config, con un
+  NoSuchMethodError/UnsupportedClassVersionError dificil de relacionar
+  con la version de Java."
+  []
+  (let [java-version (System/getProperty "java.version")
+        java-major (java-major-version)]
+    (when (< java-major min-java-version)
+      (println (format "ERROR: caudal necesita Java %d o superior para correr (version detectada: %s). Actualiza el JDK antes de continuar."
+                       min-java-version java-version))
+      (System/exit 1))))
 
 (defn- config-file?
   "Return true if a file has .clj or .config extension"
@@ -80,6 +119,7 @@
       (load-config file pass))))
 
 (defn -main [& args]
+  (check-java-version!)
   (let [[name version] (name&version)
         [opts args banner] (cli args
                                 ["-h" "--help" "Show help" :flag true :default false]
