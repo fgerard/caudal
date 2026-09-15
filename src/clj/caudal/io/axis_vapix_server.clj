@@ -269,7 +269,7 @@
                (log/info "AXIS-VAPIX: reintentando en " retry-ms "ms " (pr-str camera-info))
                (Thread/sleep (long retry-ms)))))]
     (.setDaemon t true)
-    (.setName t (str "axis-vapix-" (:camera camera-info (:ip camera))))
+    (.setName t (str "axis-vapix-" (camera-id camera)))
     (.start t)
     t))
 
