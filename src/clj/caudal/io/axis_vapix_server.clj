@@ -34,8 +34,8 @@
 (defn fetch-ws-token
   "Digest-auth GET a la cgi de sesion WS de la camara -- regresa el token
   de sesion (string) que hay que pegar en la query string del websocket."
-  [{:keys [ip user password]}]
-  (let [url (format "http://%s/axis-cgi/wssession.cgi" ip)
+  [{:keys [protocol ip port user password] :or {protocol "http" port 80}}]
+  (let [url (format "%s://%s:%s/axis-cgi/wssession.cgi" protocol ip port)
         resp (http/get url {:digest-auth [user password] :throw-exceptions true})]
     (str/trim (:body resp))))
 
@@ -47,11 +47,21 @@
         v (some data [:active :Active :state :State :value :Value])]
     (contains? #{"1" "true" true 1} v)))
 
+(defn camera-id [{:keys [ip port] :or {port 80}}]
+  (str ip ":" port))
+
+(defn- ws-scheme
+  "ws/wss se infieren de :protocol -- wss (websocket sobre TLS) es
+  exactamente lo mismo a nivel transporte que https, no tiene sentido
+  configurarlos por separado ni que puedan quedar en desacuerdo."
+  [protocol]
+  (if (= protocol "https") "wss" "ws"))
+
 (defn fetch-snapshot-bytes
   "Snapshot JPEG actual de la camara via VAPIX HTTP (digest auth) -- mismo
   endpoint que usa el prototipo Python/Clojure para guardar snapshots."
-  [{:keys [ip user password]}]
-  (let [url (format "http://%s/axis-cgi/jpg/image.cgi" ip)
+  [{:keys [protocol ip port user password] :or {protocol "http" port 80}}]
+  (let [url (format "%s://%s:%s/axis-cgi/jpg/image.cgi" protocol ip port)
         resp (http/get url {:digest-auth [user password]
                              :as :byte-array
                              :throw-exceptions true})]
@@ -62,11 +72,11 @@
   evento completo solo porque el snapshot no se pudo tomar. Se comparte
   entre :with-image? e :identify para no pedir el snapshot dos veces
   cuando ambos estan configurados."
-  [camera camera-info]
+  [camera]
   (try
     (fetch-snapshot-bytes camera)
     (catch Exception e
-      (log/warn "AXIS-VAPIX: no se pudo obtener snapshot para el evento: " (.getMessage e) " " (pr-str camera-info))
+      (log/warn "AXIS-VAPIX: no se pudo obtener snapshot para el evento: " (.getMessage e) " " (pr-str (camera-id camera)))
       nil)))
 
 (defn- bytes->b64 [^bytes b]
@@ -74,24 +84,25 @@
 
 (defn- best-identify-match
   "Del array :result :info de la respuesta del servicio de identify, el
-  hit con mayor similarity -- o nil si viene vacio (sin match/unknown)."
+  primer hit (el servicio ya lo regresa ordenado/acotado a :top_k) -- o
+  nil si viene vacio (sin match/unknown)."
   [identify-response]
-  (let [info (get-in identify-response [:result :info])]
-    (when (seq info)
-      (apply max-key :similarity info))))
+  (-> identify-response
+      (get-in [:result :info])
+      (first)))
 
 (defn call-identify
   "Llama al servicio de identificacion facial con el snapshot (bytes
   crudos) y regresa el mejor match ({:id ... :similarity ...}), o nil si
   no hubo match o hubo error -- mismo payload/headers que el prototipo
   Python/Clojure (call-identify! en vmd_stream.clj)."
-  [{:keys [url token api-key threshold top-k timeout-ms]
-    :or {threshold 0.6 top-k 1 timeout-ms 5000}}
+  [{:keys [url token api-key threshold timeout-ms]
+    :or {threshold 0.6 timeout-ms 5000}}
    image-b64]
   (try
     (let [body {:clipB64 image-b64
-                :threshold (str threshold)
-                :top_k (str top-k)
+                :threshold threshold
+                :top_k 1
                 :clip_image true
                 :return_input_clip false
                 :return_clip false
@@ -101,10 +112,10 @@
                     token (assoc "Authorization" (str "Bearer " token))
                     api-key (assoc "x-api-key" api-key))
           resp (http/post url {:body (json/write-str body)
-                                :headers headers
-                                :socket-timeout timeout-ms
-                                :connection-timeout timeout-ms
-                                :throw-exceptions false})]
+                               :headers headers
+                               :socket-timeout timeout-ms
+                               :connection-timeout timeout-ms
+                               :throw-exceptions false})]
       (if (= 200 (:status resp))
         (best-identify-match (json/read-str (:body resp) :key-fn keyword))
         (do
@@ -116,7 +127,7 @@
 
 (defn- notification->event [{:keys [camera camera-info with-image? identify]} notification]
   (let [image-bytes (when (or with-image? identify)
-                      (fetch-snapshot-bytes-safe camera camera-info))
+                      (fetch-snapshot-bytes-safe camera))
         image-b64 (when (or with-image? identify)
                     (some-> image-bytes bytes->b64))]
     (cond-> (merge camera-info
@@ -128,7 +139,7 @@
       with-image? (assoc :image-b64 image-b64)
       identify (assoc :identify (when image-b64 (call-identify identify image-b64))))))
 
-; camera-info -> {topic -> (atom bool)} -- mientras un topic siga activo (no
+; (str ip ":" port) -> {topic -> (atom bool)} -- mientras un topic siga activo (no
 ; ha llegado su notificacion de active?=false), :pulse-ms sinkea un evento
 ; sintetico extra cada tanto (mismo :topic/:data del ultimo real, pero con
 ; snapshot/identify recalculados en el momento) -- para casos donde la
@@ -139,19 +150,19 @@
 ; para pararlo, sin falta de Thread/interrupt.
 (defonce ^:private pulse-registry (atom {}))
 
-(defn- stop-pulse! [camera-info topic]
-  (when-let [running? (get-in @pulse-registry [camera-info topic])]
-    (log/info "AXIS-VAPIX: deteniendo pulso " topic " " (pr-str camera-info))
+(defn- stop-pulse! [camera topic]
+  (when-let [running? (get-in @pulse-registry [(camera-id camera) topic])]
+    (log/info "AXIS-VAPIX: deteniendo pulso " topic " " (pr-str (camera-id camera)))
     (reset! running? false))
-  (swap! pulse-registry update camera-info dissoc topic))
+  (swap! pulse-registry update (camera-id camera) dissoc topic))
 
-(defn- stop-all-pulses! [camera-info]
-  (let [topics (keys (get @pulse-registry camera-info))]
+(defn- stop-all-pulses! [camera]
+  (let [topics (keys (get @pulse-registry (camera-id camera)))]
     (when (seq topics)
-      (log/info "AXIS-VAPIX: deteniendo todos los pulsos " (pr-str topics) " " (pr-str camera-info))))
-  (doseq [running? (vals (get @pulse-registry camera-info))]
+      (log/info "AXIS-VAPIX: deteniendo todos los pulsos " (pr-str topics) " " (pr-str (camera-id camera)))))
+  (doseq [running? (vals (get @pulse-registry (camera-id camera)))]
     (reset! running? false))
-  (swap! pulse-registry dissoc camera-info))
+  (swap! pulse-registry dissoc (camera-id camera)))
 
 (defn- start-pulse-if-needed!
   "base-notification es la notificacion real que disparo :active? true --
@@ -159,11 +170,11 @@
   :image-b64/:identify/:axis-ts se recalculan frescos en notification->event
   cada vez. No hace nada si ya habia un pulso corriendo para este topic, o
   si :pulse-ms no esta configurado."
-  [{:keys [camera-info pulse-ms] :as config} sink topic base-notification]
-  (when (and pulse-ms (not (get-in @pulse-registry [camera-info topic])))
-    (log/info "AXIS-VAPIX: iniciando pulso cada " pulse-ms "ms " topic " " (pr-str camera-info))
+  [{:keys [camera pulse-ms] :as config} sink topic base-notification]
+  (when (and pulse-ms (not (get-in @pulse-registry [(camera-id camera) topic])))
+    (log/info "AXIS-VAPIX: iniciando pulso cada " pulse-ms "ms " topic " " (pr-str (camera-id camera)))
     (let [running? (atom true)]
-      (swap! pulse-registry assoc-in [camera-info topic] running?)
+      (swap! pulse-registry assoc-in [(camera-id camera) topic] running?)
       (let [t (Thread.
                ^Runnable
                (fn []
@@ -173,9 +184,9 @@
                      (try
                        (sink (assoc (notification->event config base-notification) :pulse? true))
                        (catch Exception e
-                         (log/warn "AXIS-VAPIX: error generando evento de pulso: " (.getMessage e) " " (pr-str camera-info))))))))]
+                         (log/warn "AXIS-VAPIX: error generando evento de pulso: " (.getMessage e) " " (pr-str (camera-id camera) topic))))))))]
         (.setDaemon t true)
-        (.setName t (str "axis-vapix-pulse-" (:id camera-info "cam") "-" topic))
+        (.setName t (str "axis-vapix-pulse-" (camera-id camera) "-" topic))
         (.start t)))))
 
 (defn- subscribe-payload
@@ -193,9 +204,9 @@
   bloquea el hilo que lo llama hasta entonces (pensado para correr en su
   propio hilo, ver start-reconnect-loop)."
   [{:keys [camera camera-info topic-filter topic-match] :as config} sink token]
-  (let [{:keys [ip scheme]} camera
-        uri (URI/create (format "%s://%s/vapix/ws-data-stream?sources=events&wssession=%s"
-                                (or scheme "ws") ip token))
+  (let [{:keys [protocol ip port] :or {protocol "http" port 80}} camera
+        uri (URI/create (format "%s://%s:%s/vapix/ws-data-stream?sources=events&wssession=%s"
+                                (ws-scheme protocol) ip port token))
         client (HttpClient/newHttpClient)
         done (promise)
         listener (reify WebSocket$Listener
@@ -211,18 +222,18 @@
                            (sink (notification->event config msg))
                            (if (active? msg)
                              (start-pulse-if-needed! config sink topic msg)
-                             (stop-pulse! camera-info topic))))
+                             (stop-pulse! camera topic))))
                        (catch Exception e
                          (log/error "AXIS-VAPIX: error procesando mensaje: " (.getMessage e) " -- raw: " data)))
                      (.request ws 1)
                      nil)
                    (onError [_ _ws error]
                      (log/error "AXIS-VAPIX: websocket error: " (.getMessage error) " " (pr-str camera-info))
-                     (stop-all-pulses! camera-info)
+                     (stop-all-pulses! camera)
                      (deliver done :error))
                    (onClose [_ _ws status-code reason]
                      (log/info "AXIS-VAPIX: websocket cerrado: " status-code " " reason " " (pr-str camera-info))
-                     (stop-all-pulses! camera-info)
+                     (stop-all-pulses! camera)
                      (deliver done :closed)
                      nil))]
     (try
@@ -258,7 +269,7 @@
                (log/info "AXIS-VAPIX: reintentando en " retry-ms "ms " (pr-str camera-info))
                (Thread/sleep (long retry-ms)))))]
     (.setDaemon t true)
-    (.setName t (str "axis-vapix-" (:id camera-info (:ip camera))))
+    (.setName t (str "axis-vapix-" (:camera camera-info (:ip camera))))
     (.start t)
     t))
 
@@ -271,14 +282,23 @@
   per notification received. Auto-reconnects (after :retry-ms) if the
   connection drops or errors -- runs in its own daemon thread.
 
-  - _camera:_ `{:ip ... :user ... :password ... :scheme}` (required,
-    _ip_/_user_/_password_ mandatory, or the system exits fatally) --
-    _scheme_ is \"ws\" or \"wss\" (default \"ws\"; use \"wss\" only if
-    the camera has a valid certificate)
-  - _camera-info:_ static map merged into every sinked event (e.g. `{:id
-    \"entrada-principal\"}`) to identify which camera an event came from
-    -- same convention as caudal.io.rfid-server's controler-info
-    (default `{}`)
+  - _camera:_ `{:protocol ... :ip ... :port ... :user ... :password ...}`
+    (required, _ip_/_user_/_password_ mandatory, or the system exits
+    fatally) -- _protocol_ is \"http\" or \"https\" (default \"http\"),
+    used for both the HTTP calls (session token, snapshot) and the
+    WebSocket URI (the ws/wss scheme is inferred from it: \"http\" ->
+    \"ws\", \"https\" -> \"wss\", since a websocket-over-TLS endpoint and
+    an https endpoint are the same transport, use \"https\" only if the
+    camera has a valid certificate); _port_ defaults to 80 -- override
+    _protocol_/_port_ to reach the camera through a tunnel (e.g. SSH port
+    forwarding) instead of talking to it directly
+  - _camera-info:_ static map merged into every sinked event (e.g. `{:camera
+    \"entrada-principal\"}`) -- _must be unique per camera_, it's what lets
+    you tell which camera an event came from downstream (same convention
+    as caudal.io.rfid-server's controler-info); it is NOT used to key
+    internal state (pulses are tracked by _camera_'s ip:port, see
+    _pulse-ms_ below), so a duplicate _camera-info_ across two cameras
+    won't break pulsing, only make sinked events ambiguous. Default `{}`
   - _topic-filter:_ VAPIX topic filter string, or a vector of strings to
     subscribe to several at once -- required, the camera rejects an
     empty/missing eventFilterList (confirmed against real Axis
@@ -300,8 +320,8 @@
   - _identify:_ if given, a map to call a face-identify HTTP service
     with the event's snapshot for EVERY sinked event, and attach the
     result as _:identify_ -- `{:url ... :token ... :api-key ...
-    :threshold 0.6 :top-k 1 :timeout-ms 5000}` (_token_/_api-key_
-    optional, _threshold_/_top-k_/_timeout-ms_ default as shown). Same
+    :threshold 0.6 :timeout-ms 5000}` (_token_/_api-key_
+    optional, _threshold_/_timeout-ms_ default as shown). Same
     request shape as the vmd_stream.clj prototype's identify service
     call. Shares the SAME snapshot fetch as _with-image?_ when both are
     configured together (only one HTTP round-trip to the camera, not
@@ -340,19 +360,19 @@
 
   ```
   (deflistener axis-cam1 [{:type 'caudal.io.axis-vapix-server
-                           :parameters {:camera {:ip \"10.0.0.50\"
-                                                  :user \"root\"
-                                                  :password \"...\"
-                                                  :scheme \"ws\"}
-                                        :camera-info {:id \"entrada-principal\"}
+                           :parameters {:camera {:protocol \"http\"
+                                                 :ip \"10.0.0.50\"
+                                                 :port 80
+                                                 :user \"root\"
+                                                 :password \"...\"}
+                                        :camera-info {:camera \"entrada-principal\"}
                                         :topic-filter \"tnsaxis:CameraApplicationPlatform/facedetector/CameraProfile1\"
                                         :retry-ms 5000
                                         :with-image? true
-                                        :pulse-ms 2000
+                                        :pulse-ms 1000
                                         :identify {:url \"http://127.0.0.1:8000/identify\"
                                                    :token \"...\"
                                                    :threshold 0.6
-                                                   :top-k 1
                                                    :timeout-ms 5000}}}])
   ```
   "
