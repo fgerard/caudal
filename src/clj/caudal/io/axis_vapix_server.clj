@@ -10,26 +10,36 @@
   "Event listener for Axis camera VAPIX WebSocket event streaming
    (JSON-RPC over ws/wss, /vapix/ws-data-stream) -- auto-reconnecting.
 
-   Port of the event-source half of the vmd-stream.clj prototype at
+   Ported from the event-source half of the vmd-stream.clj prototype at
    quantum-cameras/vendors/axis/src/vmd_stream.clj: connect, authenticate
    (digest auth -> ws session token), subscribe to :topic-filter, sink one
-   caudal event per notification. The app-specific half of that prototype
-   (snapshots, pulse-while-active, CLIP identify) is deliberately NOT
-   ported here -- that's streamer/business logic, it belongs downstream
+   caudal event per notification. Unlike that prototype, snapshot capture
+   (:with-image?), face-identify service calls (:identify) and periodic
+   re-emit while a topic stays active (:pulse-ms) ARE offered here as
+   built-in, optional, purely mechanical features -- every caudal config
+   wiring an Axis camera needs the same snapshot/identify plumbing, so it
+   belongs in the listener. What's deliberately NOT here is any actual
+   business/streamer logic on top of that (deciding what to do with an
+   identification, notification workflow, etc) -- that stays downstream
    in a caudal config reacting to the events this listener sinks, same as
    caudal.io.rfid-server only sinks :ON_TAG_READ/:ON_TAG_REMOVED and
    leaves everything else to the config that wires it.
 
-   Validated against real Axis hardware by that prototype (2026-09-11):
-   :topic-filter is mandatory -- the camera rejects an empty/missing
-   eventFilterList with error 2104."
+   Validated against real Axis hardware (2026-09-11 via the prototype,
+   and since directly via this listener): :topic-filter is mandatory --
+   the camera rejects an empty/missing eventFilterList with error 2104.
+   A real-world tested config lives at
+   docker/configs-tipicos/config-vapix-access (has real camera/service
+   credentials, so treat it as a reference, not a template to copy
+   verbatim)."
   (:require [clojure.tools.logging :as log]
             [clojure.string :as str]
             [clojure.data.json :as json]
             [clj-http.client :as http]
             [caudal.streams.common :refer [start-listener]])
   (:import (java.net URI)
-           (java.net.http HttpClient WebSocket$Listener)))
+           (java.net.http HttpClient WebSocket WebSocket$Listener)
+           (java.nio ByteBuffer)))
 
 (defn fetch-ws-token
   "Digest-auth GET a la cgi de sesion WS de la camara -- regresa el token
@@ -202,19 +212,35 @@
   "Abre el websocket, suscribe, y sinkea un evento por cada notificacion
   que matchee :topic-match (si se dio) hasta que se cierre/truene --
   bloquea el hilo que lo llama hasta entonces (pensado para correr en su
-  propio hilo, ver start-reconnect-loop)."
-  [{:keys [camera camera-info topic-filter topic-match] :as config} sink token]
+  propio hilo, ver start-reconnect-loop).
+
+  Tambien corre un heartbeat: cada :heartbeat-ms manda un websocket Ping,
+  y si no hubo NINGUNA actividad (mensaje recibido o Pong) en 3x ese
+  intervalo, fuerza la reconexion. Hace falta porque java.net.http.
+  WebSocket no detecta por si solo un peer que desaparece sin mandar un
+  Close -- si la camara se apaga de golpe (sin FIN/RST TCP), el socket se
+  queda esperando datos indefinidamente y ni onError ni onClose se
+  disparan nunca sin este chequeo (confirmado con pruebas de resiliencia
+  reales: apagar/prender la camara a veces retomaba la coneccion sola --
+  cuando la camara si mandaba un Close -- y a veces se quedaba colgado
+  para siempre -- cuando no)."
+  [{:keys [camera camera-info topic-filter topic-match heartbeat-ms] :or {heartbeat-ms 15000} :as config} sink token]
   (let [{:keys [protocol ip port] :or {protocol "http" port 80}} camera
         uri (URI/create (format "%s://%s:%s/vapix/ws-data-stream?sources=events&wssession=%s"
                                 (ws-scheme protocol) ip port token))
         client (HttpClient/newHttpClient)
         done (promise)
+        last-activity (atom (System/currentTimeMillis))
+        watchdog-alive? (atom true)
+        touch! (fn [] (reset! last-activity (System/currentTimeMillis)))
         listener (reify WebSocket$Listener
                    (onOpen [_ ws]
+                     (touch!)
                      (log/info "AXIS-VAPIX: websocket abierto, suscribiendo " (pr-str camera-info))
                      (.sendText ws (json/write-str (subscribe-payload topic-filter)) true)
                      (.request ws 1))
                    (onText [_ ws data _last]
+                     (touch!)
                      (try
                        (let [msg (json/read-str (str data) :key-fn keyword)
                              topic (topic-of msg)]
@@ -227,18 +253,49 @@
                          (log/error "AXIS-VAPIX: error procesando mensaje: " (.getMessage e) " -- raw: " data)))
                      (.request ws 1)
                      nil)
+                   (onPong [_ ws _message]
+                     (touch!)
+                     (.request ws 1)
+                     nil)
                    (onError [_ _ws error]
+                     (reset! watchdog-alive? false)
                      (log/error "AXIS-VAPIX: websocket error: " (.getMessage error) " " (pr-str camera-info))
                      (stop-all-pulses! camera)
                      (deliver done :error))
                    (onClose [_ _ws status-code reason]
+                     (reset! watchdog-alive? false)
                      (log/info "AXIS-VAPIX: websocket cerrado: " status-code " " reason " " (pr-str camera-info))
                      (stop-all-pulses! camera)
                      (deliver done :closed)
                      nil))]
     (try
-      (-> client .newWebSocketBuilder (.buildAsync uri listener) .join)
-      @done
+      (let [^WebSocket ws (-> client .newWebSocketBuilder (.buildAsync uri listener) .join)
+            dead-after-ms (* 3 (long heartbeat-ms))
+            watchdog (Thread.
+                      ^Runnable
+                      (fn []
+                        (while @watchdog-alive?
+                          (Thread/sleep (long heartbeat-ms))
+                          (when @watchdog-alive?
+                            (let [silence-ms (- (System/currentTimeMillis) @last-activity)]
+                              (if (>= silence-ms dead-after-ms)
+                                (do
+                                  (log/error "AXIS-VAPIX: sin actividad del websocket en " silence-ms "ms (>= " dead-after-ms "ms), forzando reconexion " (pr-str camera-info))
+                                  (reset! watchdog-alive? false)
+                                  (stop-all-pulses! camera)
+                                  (try
+                                    (.abort ws)
+                                    (catch Exception e
+                                      (log/warn "AXIS-VAPIX: error al abortar websocket colgado: " (.getMessage e) " " (pr-str camera-info))))
+                                  (deliver done :timeout))
+                                (try
+                                  (.sendPing ws (ByteBuffer/wrap (byte-array 0)))
+                                  (catch Exception e
+                                    (log/warn "AXIS-VAPIX: error enviando ping: " (.getMessage e) " " (pr-str camera-info))))))))))]
+        (.setDaemon watchdog true)
+        (.setName watchdog (str "axis-vapix-heartbeat-" (camera-id camera)))
+        (.start watchdog)
+        @done)
       (finally
         ; HttpClient.close() (JDK 21+) cierra conexiones idle del pool --
         ; se crea un client nuevo en cada llamada a connect-and-listen!
@@ -246,7 +303,12 @@
         ; sin liberarse de forma determinista en un listener que corre
         ; meses reconectando cada tanto. onClose/onError del listener no
         ; necesitan cleanup propio -- por contrato del JDK, para cuando
-        ; se invocan el input/output del websocket ya estan cerrados.
+        ; se invocan el input/output del websocket ya estan cerrados. El
+        ; watchdog tampoco -- watchdog-alive? ya quedo en false por
+        ; cualquiera de los tres caminos (onError/onClose/timeout) para
+        ; cuando llegamos aqui, asi que el hilo termina su vuelta actual
+        ; (a lo mas, un ultimo Thread/sleep de heartbeat-ms) y se apaga
+        ; solo -- es daemon, no hace falta esperarlo ni interrumpirlo.
         (.close client)))))
 
 (defn start-reconnect-loop
@@ -346,6 +408,19 @@
     camera+topic currently active; stops on the matching
     _:active? false_ or when the connection drops. Default nil
     (disabled).
+  - _heartbeat-ms:_ how often to send a WebSocket Ping while connected,
+    to detect a peer that goes silently unreachable (e.g. the camera
+    loses power abruptly, without sending a TCP FIN/RST or a WebSocket
+    Close) -- java.net.http.WebSocket has no built-in idle/read timeout,
+    so without this a dead-but-not-closed connection can hang forever,
+    with _onError_/_onClose_ never firing and the listener never
+    reconnecting (confirmed with real resiliency testing: power-cycling
+    the camera sometimes triggers a clean Close from it -- reconnects
+    fine on its own -- and sometimes doesn't -- hangs without this).
+    If no activity at all (a message, or a Pong reply) is seen for 3x
+    _heartbeat-ms_, the connection is force-aborted and reconnection
+    kicks in via the normal _:retry-ms_ path. Default 15000 (so ~45s to
+    detect a truly dead connection).
 
   Sinked event shape: `(merge camera-info {:event :ON_AXIS_EVENT :topic
   ... :active? bool :data {...} :axis-ts ... :image-b64 \"...\" :identify
@@ -368,6 +443,7 @@
                                         :camera-info {:camera \"entrada-principal\"}
                                         :topic-filter \"tnsaxis:CameraApplicationPlatform/facedetector/CameraProfile1\"
                                         :retry-ms 5000
+                                        :heartbeat-ms 15000
                                         :with-image? true
                                         :pulse-ms 1000
                                         :identify {:url \"http://127.0.0.1:8000/identify\"
@@ -376,8 +452,8 @@
                                                    :timeout-ms 5000}}}])
   ```
   "
-  (let [{:keys [camera camera-info topic-filter topic-match retry-ms with-image? identify pulse-ms]
-         :or {camera-info {} retry-ms 5000}} (get-in config [:parameters])]
+  (let [{:keys [camera camera-info topic-filter topic-match retry-ms heartbeat-ms with-image? identify pulse-ms]
+         :or {camera-info {} retry-ms 5000 heartbeat-ms 15000}} (get-in config [:parameters])]
     (when-not (and camera (:ip camera) (:user camera) (:password camera))
       (log/fatal "No se especifico camera con ip/user/password en la configuracion [start-listener caudal.io.axis-vapix-server]")
       (System/exit 1))
@@ -389,6 +465,7 @@
                            :topic-filter topic-filter
                            :topic-match topic-match
                            :retry-ms retry-ms
+                           :heartbeat-ms heartbeat-ms
                            :with-image? with-image?
                            :identify identify
                            :pulse-ms pulse-ms}
