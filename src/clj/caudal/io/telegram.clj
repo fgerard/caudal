@@ -1,7 +1,7 @@
 (ns caudal.io.telegram
   (:require [clojure.core.async :refer [go-loop timeout <!]]
             [clojure.tools.logging :as log]
-            ;[clojure.string :as string] 
+            [clojure.string :as S] 
             [clojure.data.json :as json]
             ;[aleph.http :as http]
             ;[byte-streams :as bs]
@@ -17,9 +17,9 @@
     ([token chat-id text] (send-text* token chat-id {} text))
     ([token chat-id options text]
      (try
-       (let [url  (str base-url token "/sendMessage")
-             base-form    [{:name "chat_id" :content (str chat-id)}
-                           {:name "text" :content text}]
+       (let [url  (str base-url (S/trim token) "/sendMessage")
+             base-form    [{:name "chat_id" :content (S/trim (str chat-id))}
+                           {:name "text" :content (S/trim (str text))}]
              options (merge {:socket-timeout 500 :connection-timeout 500} options)
              ;options-form (for [[key value] options]
              ;               {:name (name key) :content (if (coll? value) (json/write-str value) value)})
@@ -27,7 +27,7 @@
              resp         (http/post url (merge {:multipart base-form} options))]
          (-> resp :body))
        (catch Exception e
-         (log/error (pr-str [(class e) (.getMessage e)]))
+         (log/error (pr-str [(str base-url token "/sendMessage") (.getMessage e)]))
          e))))
 
   (defn send-file*
