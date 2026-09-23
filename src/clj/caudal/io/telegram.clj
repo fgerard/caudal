@@ -34,8 +34,8 @@
     "Helper function to send various kinds of files as multipart-encoded"
     [token chat-id options file method field filename]
     (try
-      (let [url          (str base-url token method)
-            base-form    [{:part-name "chat_id" :content (str chat-id)}
+      (let [url          (str base-url (S/trim token) method)
+            base-form    [{:part-name "chat_id" :content (S/trim (str chat-id))}
                           {:part-name field :content file :name filename}]
             options (merge {:socket-timeout 500 :connection-timeout 500} options)
             ;options-form (for [[key value] options]
