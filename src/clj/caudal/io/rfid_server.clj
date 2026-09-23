@@ -63,41 +63,73 @@
       (log/error "INACTIVITY: Error creating listener " controler)
       (log/error e))))
 
+(declare reconnect-chan)
+
 (defn restart?-reduction [now result [controler V]]
   (log/info (pr-str [:restart?-reduction now controler V]))
-  (let [{:keys [ctor sink-chan inactivity]} V
+  (let [{:keys [ctor sink-chan inactivity controler-info]} V
         last-read (get @activity-atom controler (System/currentTimeMillis))]
     (when (not inactivity)
       (log/error "INACTIVITY: se perdio el inactivity"))
     (log/info "INACTIVITY: " controler " delta " (- now last-read) "ms")
-    (if (> (- now last-read) (or inactivity 900000))
-      (if sink-chan
-        (try
-          (let [wait-chan (chan)
-                _ (log/info "INACTIVITY: poniendo wait-chan en sink-chan " controler)
-                _ (>!! sink-chan wait-chan)
-                _ (log/info "INACTIVITY: esperando respuesta en wait-chan " controler)
-                success? (<!! wait-chan)]
-            (log/info "INACTIVITY: " controler " stopping & disconnecting success: " success?)
+    (cond
+      ; ya hay un retry en curso via reconnect-chan (onConnectionLost, o un
+      ; intento previo de este mismo sweep que fallo) -- no lanzar otro en
+      ; paralelo, el reconnect-chan ya reintenta cada 60s indefinidamente
+      ; hasta que se limpie reconnecting-atom con un reconnect exitoso.
+      (get @reconnecting-atom controler)
+      (do
+        (log/info "INACTIVITY: ya hay una reconexion en curso via reconnect-chan, se omite este sweep " controler)
+        result)
+
+      (not (> (- now last-read) (or inactivity 900000)))
+      result
+
+      sink-chan
+      (try
+        (let [wait-chan (chan)
+              _ (log/info "INACTIVITY: poniendo wait-chan en sink-chan " controler)
+              _ (>!! sink-chan wait-chan)
+              _ (log/info "INACTIVITY: esperando respuesta en wait-chan " controler)
+              success? (<!! wait-chan)]
+          (log/info "INACTIVITY: " controler " stopping & disconnecting success: " success?)
         ; cerrando  sink-chan
-            (close! sink-chan)
-            (swap! activity-atom assoc controler (System/currentTimeMillis))
-            
-            (if-let [[_ new-sink-chan] (create-new-listener ctor controler)] ; el reader no hace falta guardar referencia porque el sink-chan nuevo...
-              (assoc result controler {:ctor ctor
-                                       :sink-chan new-sink-chan
-                                       :inactivity (or inactivity 900000)})
+          (close! sink-chan)
+          (swap! activity-atom assoc controler (System/currentTimeMillis))
+
+          (if-let [[_ new-sink-chan] (create-new-listener ctor controler)] ; el reader no hace falta guardar referencia porque el sink-chan nuevo...
+            (assoc result controler {:ctor ctor
+                                     :sink-chan new-sink-chan
+                                     :inactivity (or inactivity 900000)
+                                     :controler-info controler-info})
+            ; antes: se guardaba sink-chan nil y en el SIGUIENTE sweep se
+            ; imprimia "ERROR FATAL..." para siempre sin volver a intentar
+            ; nada -- ahora se encola en el mismo reconnect-chan/
+            ; reconnecting-atom que ya usa onConnectionLost, que si
+            ; reintenta cada 60s indefinidamente.
+            (do
+              (log/error "INACTIVITY: no se pudo recrear el listener, encolando retry via reconnect-chan " controler)
+              (swap! reconnecting-atom assoc controler true)
+              (put! reconnect-chan [ctor controler-info])
               (assoc result controler {:ctor ctor
                                        :sink-chan nil
-                                       :inactivity (or inactivity 900000)})))
-          (catch Exception e
-            (log/error "Error en restart?-reduction " controler)
-            (log/error e)
-            result))
-        (do
-          (log/error "INACTIVITY: ERROR FATAL NO SE PUDO RECUPERAR CONECCION CON " controler)
+                                       :inactivity (or inactivity 900000)
+                                       :controler-info controler-info}))))
+        (catch Exception e
+          (log/error "Error en restart?-reduction " controler)
+          (log/error e)
           result))
-      result)))
+
+      ; sink-chan ya era nil (fallo de un sweep anterior) y por lo que sea
+      ; reconnecting-atom no esta prendida -- red de seguridad, no deberia
+      ; pasar en operacion normal ya que el branch de arriba siempre prende
+      ; reconnecting-atom antes de dejar sink-chan en nil.
+      :else
+      (do
+        (log/error "INACTIVITY: sink-chan era nil sin retry en curso, encolando retry via reconnect-chan " controler)
+        (swap! reconnecting-atom assoc controler true)
+        (put! reconnect-chan [ctor controler-info])
+        result))))
 
 (defn internal_check4inactivity [listeners-map]
   (let [now (System/currentTimeMillis)]
@@ -525,10 +557,16 @@
 
 (declare start-server)
 
+; payload de la cola: [ctor controler-info] -- ctor es un (partial
+; start-server ...) ya armado con toda su config estatica, lo empujan
+; tanto onConnectionLost como restart?-reduction (via caudal.io.rfid-
+; server/reconnect-chan, ver mas abajo) cuando un intento de reconexion
+; falla. Reintenta cada 60s indefinidamente hasta que reconnecting-atom
+; se limpie (un reconnect exitoso), o hasta que otra via ya haya
+; reconectado mientras esperaba en la cola (se descarta sin tocar nada).
 (defn create-reconnect2antenna-channel []
   (let [reconnect-chan (chan 10)]
-    (go-loop [[sink chan-buf-size controler-info  RfMode antennas
-               cleanup-delta fastId d-id-re keepalive-ms tag-policy] (<! reconnect-chan)]
+    (go-loop [[ctor controler-info] (<! reconnect-chan)]
       (let [controler (:controler controler-info)]
         (if-not (get @reconnecting-atom controler)
           ; ya se reconecto por otro lado mientras este intento esperaba en
@@ -536,9 +574,7 @@
           (log/info "Reconnect descartado (ya no hace falta) " controler)
           (do
             (log/error "Reconnecting reader " (pr-str controler-info))
-            (let [ctor (partial start-server sink chan-buf-size controler-info RfMode antennas
-                                cleanup-delta fastId d-id-re keepalive-ms tag-policy)
-                  [d-reader sink-chan] (ctor)]
+            (let [[d-reader sink-chan] (ctor)]
               (if d-reader
                 (do
                   (log/info "Reconnected reader " (pr-str controler-info))
@@ -547,13 +583,13 @@
                          (fn [listener]
                            (-> listener
                                (assoc :ctor ctor)
-                               (assoc :sink-chan sink-chan))))
+                               (assoc :sink-chan sink-chan)
+                               (assoc :controler-info controler-info))))
                   (swap! activity-atom assoc controler (System/currentTimeMillis)))
                 (go
                   (log/error "Reconeccion no exitosa, reintentando el 60s")
                   (<! (timeout 60000))
-                  (>! reconnect-chan [sink chan-buf-size controler-info RfMode antennas
-                                      cleanup-delta fastId d-id-re keepalive-ms tag-policy])))))))
+                  (>! reconnect-chan [ctor controler-info])))))))
       (recur (<! reconnect-chan)))
     reconnect-chan))
 
@@ -561,7 +597,9 @@
 
 (defn create-connection-lost-listener [sink chan-buf-size controler-info RfMode antennas
                                        cleanup-delta fastId d-id-re keepalive-ms tag-policy]
-  (let [controler (:controler controler-info)]
+  (let [controler (:controler controler-info)
+        ctor (partial start-server sink chan-buf-size controler-info RfMode antennas
+                      cleanup-delta fastId d-id-re keepalive-ms tag-policy)]
     (reify ConnectionLostListener
       (onConnectionLost [_ reader]
         (try
@@ -578,8 +616,7 @@
             (stop&disconnect reader controler)
 
             (swap! reconnecting-atom assoc controler true)
-            (put! reconnect-chan [sink chan-buf-size controler-info RfMode antennas
-                                  cleanup-delta fastId d-id-re keepalive-ms tag-policy]))
+            (put! reconnect-chan [ctor controler-info]))
           (catch Throwable t
             (log/error t)))))))
 
@@ -731,5 +768,6 @@
     (swap! activity-atom assoc controler (System/currentTimeMillis))
     (swap! listeners-atom assoc controler {:ctor d-starter
                                            :sink-chan sink-chan
-                                           :inactivity inactivity})
+                                           :inactivity inactivity
+                                           :controler-info controler-info})
     [reader sink-chan]))
