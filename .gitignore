@@ -37,8 +37,6 @@ resources/security
 resources/.DS_Store
 src/.DS_Store
 src/clj/.DS_Store
-container-content
-container-data
 
 # configs de clientes reales (credenciales/tokens reales) -- referencia
 # local para pruebas, nunca debe versionarse

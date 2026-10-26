@@ -55,7 +55,8 @@
       (->INFO [:all]))))))
 
 (deflistener tcp7777 [{:type 'caudal.io.tcp-server
-                       :parameters {:port 7777
+                       :parameters {:host "0.0.0.0"
+                                    :port 7777
                                     :idle-period 60}}])
 
 (deflistener rest-listener [{:type       'caudal.io.rest-server

@@ -1,48 +1,48 @@
 # caudal - imagen docker
 
-## 1. Build del distro (en la maquina de desarrollo, dentro de este repo)
 ```
-bin/make-distro.sh
+docker/
+├── Dockerfile
+├── bin/build.sh                construye (y con --push publica) la imagen
+└── execution-template/
+    ├── bootstrap.sh            se copia a mano al servidor e instala una instancia
+    └── data/                   template de una instancia; viaja dentro de la imagen
 ```
-Compila el uberjar y arma `caudal-$VERSION/` en la raiz del repo (jar, bin/,
-config/, resources/, project.clj), donde `$VERSION` sale de `project.clj`
-(unica fuente de verdad para la version).
 
-## 2. Build de la imagen (en la maquina de desarrollo)
-```
-docker/build.sh <ruta-a-caudal-$VERSION> [directorio-libs-extra] [--push]
-```
-Empaqueta `docker/container-content/` a partir del distro generado en el
-paso 1 (jar, resources, bin, project.clj) y construye la imagen
-`quantumlabs/caudal:$VERSION`. Con `--push` construye multi-arquitectura
-(`linux/arm64,linux/amd64`) y sube a Docker Hub; sin `--push` construye solo
-para la arquitectura del host y la carga al daemon local (`--load`, que no
-soporta manifests multi-plataforma) para probarla ahi mismo.
+## Build (en la máquina de desarrollo)
 
-## 3. Generar los datos de una instancia (cliente/planta)
 ```
-docker/create-data-dir.sh <sufijo> <ruta-a-caudal-$VERSION>
+docker/bin/build.sh            # solo la arquitectura del host, cargada en el docker local
+docker/bin/build.sh --push     # linux/amd64 + linux/arm64, publicada en Docker Hub
 ```
-Genera `docker/container-data/data/` a partir de
-`docker/execution-template/config-<sufijo>/` y
-`docker/execution-template/start-<sufijo>.sh`, sincronizando
-`VERSION`/`IMAGE_NAME` en el `instance.env` de esa instancia (unica fuente
-de verdad: el nombre del directorio de build, ej. `caudal-0.9.1`) --
-`start.sh` los lee de ahi en tiempo de ejecucion, no se regenera por cada
-build. Ver `docker/execution-template/README.md` para el contrato de cada
-`config-<sufijo>/`/`start-<sufijo>.sh` y como crear uno nuevo a partir de
-`config-TEMPLATE/`/`start-TEMPLATE.sh`.
 
-## 4. Deploy y uso (en el servidor destino)
-Copiar `container-data/data/` (con `start.sh`, `bin/` y
-`config-<sufijo>/`) a donde sea en el servidor -- `start.sh` se autoubica y
-monta ese mismo directorio como `/opt/quantumlabs/caudal/data` en el
-contenedor. `config-<sufijo>/instance.env` trae `CONTAINER_NAME`,
-`TIMEZONE`, `MINIMUM_MEMORY`, `MAXIMUM_MEMORY`, `TCP_PORT`, `HTTP_PORT` y
-`BIND_EXTRA_IPS` editables a mano por instancia.
-```
-data/start.sh
-```
-Lanza `docker run` usando los parametros de `config-<sufijo>/instance.env`
-(puertos config-driven: caudal no tiene puertos fijos como otros productos
-de quantumlabs, cada `main.clj` de instancia declara los suyos).
+Compila el dashboard (`shadow-cljs release`) y el uberjar, y construye
+`quantumlabs/caudal:$VERSION`, con `$VERSION` leída de `project.clj`. El uberjar se arma en el
+host y no dentro de docker porque `OctaneSDKJava` y `llrp` solo existen en el `~/.m2` local.
+
+La imagen lleva el jar, `bin/caudal` y una copia de `execution-template/data/` con el
+`VERSION` de su `instance.env` ya sincronizado. El contexto del build es la raíz del repo,
+filtrado por `.dockerignore` (lista blanca). La imagen es pública, así que nada de configs de
+clientes.
+
+## Instalar una instancia (en el servidor)
+
+Requiere Docker, y que el usuario que instala esté en el grupo `docker` (o tenga `sudo`).
+
+1. Crear el directorio de la instancia, darle dueño y copiar ahí `bootstrap.sh`:
+   ```
+   sudo mkdir -p /opt/quantum/caudal-<nombre>/data
+   sudo chown -R quantum:quantum /opt/quantum/caudal-<nombre>
+   scp docker/execution-template/bootstrap.sh <server>:/opt/quantum/caudal-<nombre>/data/
+   ```
+2. En el servidor, como el usuario dueño (`sudo -iu quantum`):
+   ```
+   cd /opt/quantum/caudal-<nombre>/data
+   chmod +x bootstrap.sh
+   ./bootstrap.sh --version <ver>
+   ```
+3. Editar `config/instance.env` y `config/main.clj` y correr `./start.sh`. El `README.md` que
+   queda en `data/` documenta cada archivo, cómo actualizar y cómo operar la instancia.
+
+Para otra instancia en el mismo host, repetir con otro directorio, y en su `instance.env`
+poner otro `CONTAINER_NAME` y otros `PORTS`.

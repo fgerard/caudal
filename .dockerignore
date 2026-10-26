@@ -1,0 +1,19 @@
+# Contexto de docker/Dockerfile = raiz del repo. Lista blanca: la imagen es publica en Docker
+# Hub, asi que solo entra lo que copia el Dockerfile (nunca configs de clientes ni restos
+# locales que vivan dentro de docker/).
+*
+!bin/caudal
+!target/caudal-*-standalone.jar
+# Lo que sirve `web` (dashboard) desde $CAUDAL_HOME/resources/public, en disco. Sin
+# js/compiled/cljs-runtime: son restos de builds de desarrollo.
+!resources/public/index.html
+!resources/public/caudal.svg
+!resources/public/css
+!resources/public/img
+!resources/public/js/compiled/dashboard-ui.js
+!docker/execution-template/data/start.sh
+!docker/execution-template/data/README.md
+!docker/execution-template/data/bin/*.sh
+!docker/execution-template/data/config/main.clj
+!docker/execution-template/data/config/log4j2.xml
+!docker/execution-template/data/config/instance.env
