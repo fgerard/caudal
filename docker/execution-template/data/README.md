@@ -49,9 +49,18 @@ Desde el contenedor, los servicios del propio host se alcanzan como `host.docker
 ## main.clj y log4j2.xml
 
 `main.clj` y sus archivos auxiliares son la definición del procesamiento de eventos de cada
-cliente; caudal solo pone la plataforma. Arranca con `-c config/main.clj` y carga
-`log4j2.xml` del mismo directorio. `config/` también está en el classpath, así que `main.clj`
-puede requerir los namespaces auxiliares que vivan ahí.
+cliente; caudal solo pone la plataforma. Arranca con `-c config/`, igual que `bin/caudal`
+fuera de docker: carga **todos** los `.clj` de `config/` (y subdirectorios) y su
+`log4j2.xml`. Por eso no hay que dejar ahí respaldos `.clj` viejos. `config/` también está en
+el classpath, así que los `.clj` pueden requerirse entre sí. Dentro del contenedor están
+`CAUDAL_CONFIG` (`.../data/config`) y `CAUDAL_DATA` (`.../data`).
+
+La imagen trae configs sanitizadas de clientes típicos en `/opt/quantumlabs/CONFIGS/<nombre>/`
+(sin passwords ni tokens), con la forma de un `data/`. Su `config/README.md` dice qué llenar:
+
+```
+docker cp <contenedor>:/opt/quantumlabs/CONFIGS/config-rfid/. data/
+```
 
 Dentro del contenedor, cada listener de `main.clj` tiene que escuchar en `:host "0.0.0.0"`.
 Algunos (ej. `caudal.io.tcp-server`) usan `localhost` por omisión, que en docker es el loopback

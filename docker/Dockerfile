@@ -35,8 +35,16 @@ RUN sed -i "s/^VERSION=.*/VERSION=${VERSION}/" execution-template/config/instanc
     chmod -R a+rX bin lib resources execution-template && \
     chmod 755 bin/caudal execution-template/start.sh execution-template/bin/*.sh
 
+# Configs sanitizadas de clientes tipicos, como referencia: cada una tiene la forma de un data/
+# (config/, ext/), para sacarla con `docker cp <cid>:/opt/quantumlabs/CONFIGS/<nombre>/. data/`.
+COPY docker/configs /opt/quantumlabs/CONFIGS
+RUN chmod -R a+rX /opt/quantumlabs/CONFIGS
+
 ENV PATH=${PATH}:/opt/quantumlabs/caudal/bin
-ENV CAUDAL_CONFIG=/opt/quantumlabs/caudal/data/config/main.clj
+# CAUDAL_CONFIG es el directorio, igual que bin/caudal fuera de docker: caudal carga todos sus
+# .clj y log4j2.xml, y las configs de clientes lo usan como directorio ((str CAUDAL_CONFIG "/x")).
+ENV CAUDAL_CONFIG=/opt/quantumlabs/caudal/data/config
+ENV CAUDAL_DATA=/opt/quantumlabs/caudal/data
 
 # Directorio de trabajo en data/: las rutas relativas de main.clj y log4j2.xml (./logs,
 # ./relevantes) caen en el volumen de la instancia y no dentro del contenedor.

@@ -6,8 +6,8 @@
   ;   the terms of this license.
   ;   You must not remove this notice, or any other, from this software
 
-  (defproject caudal "1.0.7"
-    :description "Caudal Platform 1.0.7"
+  (defproject caudal "1.0.8"
+    :description "Caudal Platform 1.0.8"
     :url "http://caudal.io/"
     :license {:name "Eclipse Public License"
               :url "http://www.eclipse.org/legal/epl-v10.html"}
@@ -145,8 +145,13 @@
                    ;;[javax.jms/jms "1.1"]       ; instalado con:  (OJO con la linea anterior ya no fue necesario por ahora jejeje no lo he probado)
 ; mvn imstall:install-file -Dfile=/Users/felipedejesusgerard/Projects/Clojure/caudal/extra-lib/javax.jms-1.1.jar -DgroupId=javax.jms -DartifactId=jms -Dversion=1.1 -Dpackaging=jar -DgeneratePom=true 
 
-                   ;[org.jdom/jdom "1.1.1"]     ; instalado con: (OJO ya no lo puse y funciono a ver con el tiempo...)
-; mvn install:install-file -Dfile=/Users/felipedejesusgerard/Projects/Clojure/caudal/extra-lib/jdom.jar -DgroupId=org.jdom -DartifactId=jdom -Dversion=1.1.1 -Dpackaging=jar -DgeneratePom=true 
+                   ;; org.llrp (LLRP de Impinj) usa org.jdom.* (JDOM 1.x) y no lo
+                   ;; trae: sin esto caudal.io.rfid-server truena con
+                   ;; NoClassDefFoundError org/jdom/Content al crear el listener
+                   ;; (verificado en la imagen docker 1.0.8). Funcionaba en los deploys
+                   ;; con jar suelto porque ahi habia un jdom en lib/. Desde Maven
+                   ;; Central; 1.1.3 es la ultima 1.x (la 2.x cambia a org.jdom2).
+                   [org.jdom/jdom "1.1.3"]
                    
                    [xerces/xercesImpl "2.12.2"] ; Baja de maven central
                    

@@ -1,0 +1,16 @@
+{
+ "FACE209" {:active true :ip "<ip>" :port 503 :base-addr 8256 :open-offset 0 :n-marks 15 :bidireccional? false :vehicular? false :drops-max 3}
+ "FACE210" {:active true :ip "<ip>" :port 503 :base-addr 8256 :open-offset 0 :n-marks 15 :bidireccional? false :vehicular? false :drops-max 3}
+ "FACE211" {:active true :ip "<ip>" :port 503 :base-addr 8256 :open-offset 1 :n-marks 15 :bidireccional? true :vehicular? false :drops-max 3}
+ "FACE212" {:active true :ip "<ip>" :port 503 :base-addr 8256 :open-offset 0 :n-marks 15 :bidireccional? true :vehicular? false :drops-max 3}
+ "FACE213" {:active true :ip "<ip>" :port 503 :base-addr 8256 :open-offset 0 :n-marks 15 :bidireccional? false :vehicular? false :drops-max 3}
+ "FACE214" {:active true :ip "<ip>" :port 503 :base-addr 8256 :open-offset 0 :n-marks 15 :bidireccional? false :vehicular? false :drops-max 3}
+
+ "PLATE215" {:active true :ip "<ip>" :port 503 :base-addr 8256 :open-offset 0 :n-marks 15 :bidireccional? false :vehicular? true :drops-max 3}
+ "PLATE216" {:active true :ip "<ip>" :port 503 :base-addr 8256 :open-offset 0 :n-marks 15 :bidireccional? false :vehicular? true :drops-max 3}
+ "PLATE217" {:active true :ip "<ip>" :port 503 :base-addr 8256 :open-offset 0 :n-marks 15 :bidireccional? false :vehicular? true :drops-max 3}
+ "PLATE218" {:active true :ip "<ip>" :port 503 :base-addr 8256 :open-offset 0 :n-marks 15 :bidireccional? false :vehicular? true :drops-max 3}
+ "PLATE219" {:active true :ip "<ip>" :port 503 :base-addr 8256 :open-offset 0 :n-marks 15 :bidireccional? true :vehicular? true :drops-max 3}
+ 
+ "TOTEM1"  {:active true :semaforo? true :ip "<ip>" :port 503 :base-addr 8256 :open-offset 0 :n-marks 15 :bidireccional? false :vehicular? true :drops-max 3} 
+ }

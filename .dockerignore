@@ -17,3 +17,5 @@
 !docker/execution-template/data/config/main.clj
 !docker/execution-template/data/config/log4j2.xml
 !docker/execution-template/data/config/instance.env
+# Configs de clientes ya sanitizadas (sin passwords ni tokens), no configs-tipicos/.
+!docker/configs

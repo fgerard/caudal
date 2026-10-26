@@ -9,7 +9,7 @@ set -euo pipefail
 # Uso (una instancia por directorio; puede haber varias en el mismo host):
 #   mkdir -p /opt/quantum/caudal-<nombre>/data && cd /opt/quantum/caudal-<nombre>/data
 #   (copiar aqui bootstrap.sh)
-#   ./bootstrap.sh --version 1.0.7
+#   ./bootstrap.sh --version <version>
 #
 # Despues: editar config/instance.env (CONTAINER_NAME y PORTS unicos en el host, usuario, TZ...)
 # y config/main.clj, y correr ./start.sh. README.md documenta cada archivo.
@@ -70,7 +70,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ -z "$VERSION" ]; then
-    echo "Error: --version is required (e.g. --version 1.0.7)." >&2
+    echo "Error: --version is required (the quantumlabs/caudal tag to install)." >&2
     usage
 fi
 
