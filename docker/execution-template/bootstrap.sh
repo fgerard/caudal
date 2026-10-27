@@ -150,3 +150,13 @@ echo "     caudal on this host, TARGET_USER/TARGET_GROUP must exist and own $DAT
 echo "  2. Put this instance's config in $DATA/config/main.clj (log4j2.xml next to it), and any"
 echo "     extra jars in $DATA/ext/."
 echo "  3. Run $DATA/start.sh."
+echo ""
+echo "To start from a typical client config instead of the example main.clj (overwrites main.clj"
+echo "and log4j2.xml in $DATA/config; its config/README.md says what to fill in):"
+for typical in config-rfid config-plc-face-plate config-person; do
+  echo ""
+  echo "  # $typical"
+  echo "  CID=\$($DOCKER create quantumlabs/$IMAGE_NAME:$VERSION)"
+  echo "  $DOCKER cp \$CID:/opt/quantumlabs/CONFIGS/$typical/. $DATA/"
+  echo "  $DOCKER rm \$CID"
+done

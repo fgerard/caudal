@@ -27,25 +27,48 @@
              resp         (http/post url (merge {:multipart base-form} options))]
          (-> resp :body))
        (catch Exception e
-         (log/error (pr-str [(str base-url token "/sendMessage") (.getMessage e)]))
+         ;; sin la url: lleva el token del bot
+         (log/error (pr-str [(class e) (.getMessage e) (:body (ex-data e))]))
          e))))
 
+  (defn decode-image
+    "Turns a base64 image (plain or as a data URI, \"data:image/jpeg;base64,...\") into
+     [bytes mime-type]. Anything else (http(s) URL, Telegram file_id, bytes, File,
+     InputStream) comes back as [image nil] and is sent unchanged."
+    [image]
+    (if (and (string? image) (not (re-find #"^https?://" (S/trim image))))
+      (let [[_ mime data] (re-find #"(?s)^\s*data:([^;,]+)?(?:;[^,]*)?,(.*)$" image)
+            b64 (S/replace (or data image) #"\s" "")]
+        (try
+          [(.decode (java.util.Base64/getDecoder) ^String b64) (or mime "image/jpeg")]
+          (catch IllegalArgumentException _
+            [image nil])))
+      [image nil]))
+
   (defn send-file*
-    "Helper function to send various kinds of files as multipart-encoded"
-    [token chat-id options file method field filename]
-    (try
-      (let [url          (str base-url (S/trim token) method)
-            base-form    [{:part-name "chat_id" :content (S/trim (str chat-id))}
-                          {:part-name field :content file :name filename}]
-            options (merge {:socket-timeout 500 :connection-timeout 500} options)
-            ;options-form (for [[key value] options]
-            ;               {:part-name (name key) :content value})
-            ;form         (into base-form options-form)
-            resp         (http/post url (merge {:multipart base-form} options))]
-        (-> resp :body))
-      (catch Exception e
-        (log/error (pr-str [(class e) (.getMessage e)]))
-        e)))
+    "Helper function to send various kinds of files as multipart-encoded.
+     file: bytes, File or InputStream are uploaded as filename; a String is sent as a text
+     field (Telegram reads it as a URL or file_id, not as file contents)."
+    ([token chat-id options file method field filename]
+     (send-file* token chat-id options file method field filename nil))
+    ([token chat-id options file method field filename mime-type]
+     (try
+       (let [url          (str base-url (S/trim token) method)
+             file-part    (cond-> {:part-name field :content file :name filename}
+                            mime-type (assoc :mime-type mime-type))
+             base-form    [{:part-name "chat_id" :content (S/trim (str chat-id))}
+                           file-part]
+             ;; uploading a photo takes much longer than a sendMessage
+             options (merge {:socket-timeout 10000 :connection-timeout 3000} options)
+             ;options-form (for [[key value] options]
+             ;               {:part-name (name key) :content value})
+             ;form         (into base-form options-form)
+             resp         (http/post url (merge {:multipart base-form} options))]
+         (-> resp :body))
+       (catch Exception e
+         ;; on a 4xx/5xx clj-http only says "status 400"; Telegram's reason is in the body
+         (log/error (pr-str [(class e) (.getMessage e) (:body (ex-data e))]))
+         e))))
 
   (defn send-text
     "
@@ -89,9 +112,11 @@
     *key-or-chat-id*: Destination chat id. Same rule as *key-or-token* --
       a keyword or function reads/derives it from the event, anything
       else is a literal constant coerced with `str`.
-    *image*: Photo content sent as multipart data. A keyword or a
-      function derives it from the event (`(image event)`); anything
-      else is sent as-is.
+    *image*: The photo. A keyword or a function derives it from the
+      event (`(image event)`); anything else is used as-is. It can be a
+      base64 string (plain or data URI, decoded and uploaded as a file),
+      bytes, a File or an InputStream; an http(s) URL or a Telegram
+      file_id string is passed to Telegram unchanged.
     *options*: Optional map merged into the underlying clj-http request
       (e.g. `:socket-timeout`, `:connection-timeout`). Defaults to `{}`.
     *children*: Children streamer functions to be propagated.
@@ -101,8 +126,9 @@
       (let [token (if (or (fn? key-or-token) (keyword? key-or-token)) (key-or-token event) (str key-or-token))
             chat-id (if (or (fn? key-or-chat-id) (keyword? key-or-chat-id)) (key-or-chat-id event) (str key-or-chat-id))
             image (if (or (fn? image) (keyword? image)) (image event) image)
+            [image mime-type] (decode-image image)
             options (or options {})]
-        (send-file* token chat-id options image "/sendPhoto" "photo" "photo.png"))
+        (send-file* token chat-id options image "/sendPhoto" "photo" "photo.jpg" mime-type))
       (common/propagate by-path state event children)))
 
   (defn new-offset
