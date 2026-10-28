@@ -128,6 +128,10 @@
 (defn get-now-ts []
   (.format (java.text.SimpleDateFormat. "yyyy-MM-dd HH:mm:ss") (System/currentTimeMillis)))
 
+(defn is-night? []
+  (let [hour (.getHours (java.util.Date.))]
+    (or (< hour 7) (> hour 18))))
+
 (defn prepare-image [b64img-key img-key event]
   (let [b64img (b64img-key event)
         img (decode b64img)]
@@ -137,9 +141,9 @@
                       {objects :objects camera :alias entry_ts :entity_ts :as evt}]
   (let [objs? (seq objects)
         [[objs-detected objs-cnt] changed?] (histeresis [0 1] [objs-detected objs-cnt] (if objs? inc dec))
-        send? (and changed? (> objs-cnt 0))
+        send? (and (is-night?) changed? (> objs-cnt 0))
         tg-msg (str "Person@" camera)]
-    (log/info (str "person-reducer: " camera " objs? " objs? " objs-detected " objs-detected " objs-cnt " objs-cnt " changed? " changed?))
+    (log/info (str "person-reducer: " camera " objs? " objs? " objs-detected " objs-detected " objs-cnt " objs-cnt " changed? " changed? " send? " send?))
     (assoc evt 
            :objs-cnt objs-cnt 
            :objs-detected objs-detected 
